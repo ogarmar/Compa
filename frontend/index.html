@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acompaña - Asistente para Alzheimer</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/app.js"></script> 
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 Acompaña</h1>
+            <p>Tu asistente de voz compasivo</p>
+        </header>
+
+        <main>
+            <div class="assistant-container">
+                <div class="voice-section">
+                    <button id="micButton" class="mic-button">
+                        <span class="mic-icon">🎤</span>
+                        <span class="mic-text">PULSA PARA HABLAR</span>
+                    </button>
+                    <div id="status" class="status"></div>
+                </div>
+
+                <div class="conversation-section">
+                    <div id="conversation" class="conversation">
+                        <div class="message assistant-message">
+                            <strong>Acompaña:</strong> Hola querido usuario, soy Acompaña. Estoy aquí para ayudarte y conversar contigo. Pulsa el botón para hablar conmigo.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-section">
+                    <h3>💝 Cofre de los Recuerdos</h3>
+                    <button id="showMemories" class="memory-button">Ver mis recuerdos</button>
+                    <div id="memoryList" class="memory-list"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+</body>
+</html>

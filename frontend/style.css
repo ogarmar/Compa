@@ -1,0 +1,7 @@
+body { font-family: Arial, Helvetica, sans-serif; background:#f6f8fa; margin:0; padding:0; }
+.container{ max-width:900px; margin:20px auto; padding:16px; }
+.assistant-container{ display:grid; grid-template-columns: 1fr; gap:12px; }
+.message{ padding:10px; border-radius:8px; margin-bottom:8px; }
+.assistant-message{ background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+.user-message{ background:#e8f0ff; align-self:end; }
+.status{ margin-top:8px; font-size:0.9rem; }
