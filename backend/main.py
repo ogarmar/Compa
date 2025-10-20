@@ -12,8 +12,8 @@ import asyncio
 from googlesearch import search
 import traceback
 import google.generativeai as genai
+from telegram_bot import FamilyMessagesBot
 
-# Load environment variables
 load_dotenv()
 
 app = FastAPI(title="Asistente Alzheimer", version="1.0.0")
@@ -34,12 +34,20 @@ if not GEMINI_TOKEN:
 else:
     genai.configure(api_key=GEMINI_TOKEN)
 
-# Configure the Gemini model
 GEMINI_MODEL = "gemini-2.5-flash-lite"  # DO NOT CHANGE THIS MODEL
 
 # Constants for memory and conversation files
 MEMORY_FILE = "user_memory.json"
 CONVERSATION_FILE = "conversation_history.json"
+
+# Telegram Bot Setup
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+telegram_bot = None
+
+if TELEGRAM_TOKEN:
+    telegram_bot = FamilyMessagesBot(TELEGRAM_TOKEN)
+else:
+    print("⚠️ TELEGRAM_BOT_TOKEN no configurado - funcionalidad de mensajes familiares deshabilitada")
 
 ALZHEIMER_PROMPT = """
 Eres "Acompaña", un asistente de voz compasivo especializado en ayudar a personas con Alzheimer.
@@ -56,17 +64,65 @@ DIRECTIVAS ESTRICTAS:
 Mantén las respuestas en 1-2 frases máximo.
 """
 
+def _try_decode_bytes(b: bytes):
+    """
+    Intenta decodificar bytes en orden: utf-8, cp1252, latin-1.
+    Devuelve (text, used_encoding).
+    """
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return b.decode(enc), enc
+        except Exception:
+            continue
+    # fallback for safety
+    return b.decode("latin-1", errors="replace"), "latin-1(replace)"
+
+
 class MemoryManager:
     def __init__(self):
         self.memory_file = MEMORY_FILE
         self.conversation_file = CONVERSATION_FILE
         
     async def load_memory(self):
-        # Tries to load existing user memory or creates a new one
+        if not os.path.exists(self.memory_file):
+            initial_memory = {
+                "user_preferences": {},
+                "important_memories": [],
+                "family_members": [],
+                "daily_routine": {},
+                "emotional_state": "calm"
+            }
+            await self.save_memory(initial_memory)
+            return initial_memory
+
         try:
-            async with aiofiles.open(self.memory_file, 'r') as f:
+            async with aiofiles.open(self.memory_file, 'r', encoding='utf-8') as f:
                 content = await f.read()
                 return json.loads(content)
+        except UnicodeDecodeError as ude:
+            print("Error leyendo memoria (utf-8):", ude)
+            try:
+                async with aiofiles.open(self.memory_file, 'rb') as f:
+                    raw_bytes = await f.read()
+                text, used_enc = _try_decode_bytes(raw_bytes)
+                print(f"Decoded memory file with fallback encoding: {used_enc}. Normalizing to utf-8...")
+                data = json.loads(text)
+                try:
+                    async with aiofiles.open(self.memory_file, 'w', encoding='utf-8') as f:
+                        await f.write(json.dumps(data, indent=2, ensure_ascii=False))
+                    print("Memoria reescrita en UTF-8 correctamente.")
+                except Exception as e:
+                    print("Error reescribiendo memoria en UTF-8:", e)
+                return data
+            except Exception as e:
+                print("Error leyendo/decodificando memoria con fallback:", e)
+                return {
+                    "user_preferences": {},
+                    "important_memories": [],
+                    "family_members": [],
+                    "daily_routine": {},
+                    "emotional_state": "calm"
+                }
         except FileNotFoundError:
             initial_memory = {
                 "user_preferences": {},
@@ -77,11 +133,41 @@ class MemoryManager:
             }
             await self.save_memory(initial_memory)
             return initial_memory
+        except json.JSONDecodeError as jde:
+            print("JSON corrupto en memory file:", jde)
+            try:
+                async with aiofiles.open(self.memory_file, 'rb') as f:
+                    raw_bytes = await f.read()
+                text, used_enc = _try_decode_bytes(raw_bytes)
+                data = json.loads(text)
+                async with aiofiles.open(self.memory_file, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(data, indent=2, ensure_ascii=False))
+                return data
+            except Exception as e:
+                print("No se pudo reparar memory file:", e)
+                return {
+                    "user_preferences": {},
+                    "important_memories": [],
+                    "family_members": [],
+                    "daily_routine": {},
+                    "emotional_state": "calm"
+                }
+        except Exception as e:
+            print("Error leyendo memoria (general):", e)
+            return {
+                "user_preferences": {},
+                "important_memories": [],
+                "family_members": [],
+                "daily_routine": {},
+                "emotional_state": "calm"
+            }
         
     async def save_memory(self, memory_data):
-        # Writes the memory data to the JSON file
-        async with aiofiles.open(self.memory_file, 'w') as f:
-            await f.write(json.dumps(memory_data, indent=2, ensure_ascii=False))
+        try:
+            async with aiofiles.open(self.memory_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(memory_data, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print("Error guardando memoria:", e)
         
     async def add_important_memory(self, memory_text, category="personal"):
         # Adds a new memory to the list and saves the file
@@ -119,92 +205,217 @@ class MemoryManager:
         return relevant[:limit]
         
     async def save_conversation(self, user_message, assistant_response):
-        # Saves the user message and assistant's response to history
+        # Saves the user message and assistant's response to history with utf-8 safe I/O
         try:
-            async with aiofiles.open(self.conversation_file, 'r') as f:
-                conversations = json.loads(await f.read())
-        except FileNotFoundError:
             conversations = []
-        
-        conversation_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "user": user_message,
-            "assistant": assistant_response
-        }
-        conversations.append(conversation_entry)
-        # Keep only the last 100 entries
-        if len(conversations) > 100:
-            conversations = conversations[-100:]
-        async with aiofiles.open(self.conversation_file, 'w') as f:
-            await f.write(json.dumps(conversations, indent=2, ensure_ascii=False))
+            if os.path.exists(self.conversation_file):
+                try:
+                    async with aiofiles.open(self.conversation_file, 'r', encoding='utf-8') as f:
+                        conversations = json.loads(await f.read())
+                except UnicodeDecodeError:
+                    print("Error leyendo conversation_history.json con utf-8; aplicando fallback.")
+                    try:
+                        async with aiofiles.open(self.conversation_file, 'rb') as f:
+                            raw_bytes = await f.read()
+                        text, used_enc = _try_decode_bytes(raw_bytes)
+                        conversations = json.loads(text)
+                        
+                        async with aiofiles.open(self.conversation_file, 'w', encoding='utf-8') as f:
+                            await f.write(json.dumps(conversations, indent=2, ensure_ascii=False))
+                        print("conversation_history.json reescrito en UTF-8.")
+                    except Exception as e:
+                        print("No se pudo reparar conversation_history.json:", e)
+                        conversations = []
+                except json.JSONDecodeError:
+                    print("JSON corrupto en conversation_history.json; se reiniciará.")
+                    conversations = []
+                except Exception as e:
+                    print("Error leyendo conversation file:", e)
+                    conversations = []
+            else:
+                conversations = []
+            
+            conversation_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "user": user_message,
+                "assistant": assistant_response
+            }
+            conversations.append(conversation_entry)
+            # Keep only the last 100 entries
+            if len(conversations) > 100:
+                conversations = conversations[-100:]
+            async with aiofiles.open(self.conversation_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(conversations, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print("Error guardando conversación:", e)
 
 memory_manager = MemoryManager()
 
-# WebSocket endpoint for real-time conversation
+
+# WEBSOCKET
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    print("✅ Nueva conexión WebSocket establecida")
+    
     try:
         user_memory = await memory_manager.load_memory()
-        await websocket.send_text("Bienvenido querido usuario. Soy Acompaña, tu asistente personal. ¿En qué puedo ayudarte hoy?")
+        try:
+            await websocket.send_text(json.dumps({"type":"message","text":"Hola querido usuario. Soy Acompaña, tu asistente personal. Estoy aquí para ayudarte."}, ensure_ascii=False))
+        except Exception as e:
+            print("No se pudo enviar saludo inicial por WS:", e)
         
         while True:
-            data = await websocket.receive_text()
-            user_message = data.strip()
-            if not user_message:
-                continue
-            
-            # Check for relevant memories
-            relevant_memories = await memory_manager.get_relevant_memories(user_message)
-            memory_context = ""
-            if relevant_memories:
-                memory_context = " | ".join([mem["content"] for mem in relevant_memories])
-                print(f"DEBUG: Found memories: {len(relevant_memories)}")
-                print(f"DEBUG: Memory context: {memory_context}")
-            
-            # Detect and save new important memories
-            important_keywords = ["recuerdo cuando", "me acuerdo de", "mi hijo", "mi hija", "mi esposo", "mi esposa", "cuando era joven", "mi nieto", "mi nieta", "qué ilusión", "me encantaba"]
-            memory_saved = False
-            
-            if any(keyword in user_message.lower() for keyword in important_keywords):
-                memory_saved = True
-                new_memory = await memory_manager.add_important_memory(user_message, "personal")
-                print(f"DEBUG: Memory saved: {new_memory['id']}")
-            
-            # Call Gemini API
             try:
-                if not GEMINI_TOKEN:
-                    ai_response = "Error: GEMINI_TOKEN is not configured."
-                else:
-                    model = genai.GenerativeModel(GEMINI_MODEL)
-                    
-                    generation_config = genai.types.GenerationConfig(
-                        max_output_tokens=250,
-                        temperature=0.4,
-                    )
-                    
-                    # Determine if it's a memory-related question
-                    is_memory_question = any(keyword in user_message.lower() for keyword in 
-                                             ["recuerdo", "recuerdos", "acuerdo", "memoria", "pasado", "cuando", "antes"])
-                    
-                    # Build the prompt based on context and question type
-                    if is_memory_question and memory_context:
-                        # For memory questions with context
-                        full_prompt = f"""
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=300.0)
+                raw = data.strip()
+                if not raw:
+                    continue
+
+                try:
+                    maybe = json.loads(raw)
+                    if isinstance(maybe, dict) and maybe.get("type") == "keepalive":
+                        try:
+                            await websocket.send_text(json.dumps({"type": "pong", "ts": datetime.now().timestamp()}, ensure_ascii=False))
+                        except:
+                            try:
+                                await websocket.send_text("pong")
+                            except:
+                                pass
+                        print(f"📶 Keepalive recibido: {maybe.get('ts')}")
+                        continue
+                except Exception:
+                    pass
+
+                user_message = raw
+                if not user_message:
+                    continue
+
+                print(f"📥 Mensaje recibido: {user_message}")
+                
+                family_keywords = [
+                    "mensaje", "mensajes", "familiar", "familiares", "familia",
+                    "léeme", "lee", "leer", "dime", "cuéntame", "hay", "tienes", "tengo"
+                ]
+                
+                is_about_messages = any(word in user_message.lower() for word in ["mensaje", "familia", "familiar"])
+                is_family_request = is_about_messages and any(word in user_message.lower() for word in family_keywords)
+                
+                asking_today = any(word in user_message.lower() for word in ["hoy", "día de hoy", "del día", "de hoy"])
+                
+                print(f"🔍 is_family_request={is_family_request}, asking_today={asking_today}")
+
+                if is_family_request and telegram_bot:
+                    try:
+                        print(f"🔍 Detectada solicitud de mensajes familiares: '{user_message}'")
+                        
+                        if asking_today:
+                            today_messages = await telegram_bot.get_messages_today()
+                            print(f"📅 Mensajes de hoy encontrados: {len(today_messages)}")
+                            
+                            if today_messages:
+                                messages_text = []
+                                for msg in today_messages:
+                                    msg_str = f"{msg['sender_name']} te escribió a las {msg['time']}: {msg['message']}"
+                                    messages_text.append(msg_str)
+                                    if not msg.get('read'):
+                                        await telegram_bot.mark_as_read(msg['id'])
+                                
+                                ai_response = f"Tienes {len(today_messages)} mensaje{'s' if len(today_messages) > 1 else ''} de hoy. " + messages_text[0]
+                            else:
+                                ai_response = "No tienes mensajes nuevos de hoy, querida."
+                        else:
+                            unread = await telegram_bot.get_unread_messages()
+                            print(f"📬 Mensajes no leídos encontrados: {len(unread)}")
+                            
+                            if unread:
+                                first_msg = unread[0]
+                                date_str = first_msg.get('date', 'recientemente')
+                                time_str = first_msg.get('time', '')
+                                sender = first_msg.get('sender_name', 'un familiar')
+                                message_content = first_msg.get('message', '')
+                                
+                                if date_str != 'recientemente' and time_str:
+                                    ai_response = f"Sí, querida. Tienes {len(unread)} mensaje{'s' if len(unread) > 1 else ''} nuevo{'s' if len(unread) > 1 else ''}. El primero es de {sender} del día {date_str} a las {time_str}: {message_content}"
+                                else:
+                                    ai_response = f"Sí, querida. Tienes {len(unread)} mensaje{'s' if len(unread) > 1 else ''} nuevo{'s' if len(unread) > 1 else ''}. El primero es de {sender}: {message_content}"
+                                
+                                print(f"✅ Mensaje a narrar: {ai_response[:100]}")
+                                
+                                await telegram_bot.mark_as_read(first_msg['id'])
+                            else:
+                                ai_response = "No tienes mensajes nuevos de tus familiares en este momento, querida."
+                                print("ℹ️ No hay mensajes no leídos")
+                        
+                        try:
+                            await memory_manager.save_conversation(user_message, ai_response)
+                        except Exception as e:
+                            print("Warning: fallo guardando conversación:", e)
+                        
+                        try:
+                            payload = {"type": "message", "text": ai_response}
+                            await websocket.send_text(json.dumps(payload, ensure_ascii=False))
+                        except Exception as e:
+                            print("Error enviando respuesta por websocket:", e)
+                        
+                        continue
+                        
+                    except Exception as e:
+                        print(f"❌ Error leyendo mensajes familiares: {e}")
+                        traceback.print_exc()
+                        ai_response = "Lo siento querida, he tenido un problema al revisar tus mensajes. Intenta preguntarme de nuevo en un momento."
+                        try:
+                            await websocket.send_text(json.dumps({"type": "message", "text": ai_response}, ensure_ascii=False))
+                        except:
+                            pass
+                        continue
+
+                # search relevant memories
+                relevant_memories = await memory_manager.get_relevant_memories(user_message)
+                memory_context = ""
+                if relevant_memories:
+                    memory_context = " | ".join([mem["content"] for mem in relevant_memories])
+                    print(f"DEBUG: Recuerdos encontrados: {len(relevant_memories)}")
+                    print(f"DEBUG: Contexto de memoria: {memory_context}")
+
+                important_keywords = ["recuerdo cuando", "me acuerdo de", "mi hijo", "mi hija", "mi esposo", "mi esposa", "cuando era joven", "mi nieto", "mi nieta", "qué ilusión", "me encantaba"]
+                memory_saved = False
+
+                if any(keyword in user_message.lower() for keyword in important_keywords):
+                    memory_saved = True
+                    new_memory = await memory_manager.add_important_memory(user_message, "personal")
+                    print(f"DEBUG: Recuerdo guardado: {new_memory['id']}")
+
+                try:
+                    if not GEMINI_TOKEN:
+                        ai_response = "Error: GEMINI_TOKEN no configurado."
+                    else:
+                        model = genai.GenerativeModel(GEMINI_MODEL)
+
+                        generation_config = genai.types.GenerationConfig(
+                            max_output_tokens=250,
+                            temperature=0.4,
+                        )
+
+                        is_memory_question = any(keyword in user_message.lower() for keyword in 
+                                                 ["recuerdo", "recuerdos", "acuerdo", "memoria", "pasado", "cuando", "antes"])
+
+                        if is_memory_question and memory_context:
+                            full_prompt = f"""
 Eres "Acompaña", un asistente especializado en Alzheimer. Responde con frases cortas y tono afectuoso.
 
-CRITICAL INFORMATION - THESE ARE THE USER'S REAL MEMORIES:
+INFORMACIÓN CRÍTICA - ESTOS SON LOS RECUERDOS REALES DEL USUARIO:
 {memory_context}
 
-The user asks: "{user_message}"
+El usuario te pregunta: "{user_message}"
 
-RESPOND by specifically mentioning the memories above. If they don't fit perfectly, adapt your response kindly.
+RESPONDE mencionando específicamente los recuerdos de arriba. Si no encajan perfectamente, adapta tu respuesta afectivamente.
 
-Your response (1-2 sentences, mentioning the memories):
+Tu respuesta (1-2 frases, mencionando los recuerdos):
 """
-                    elif is_memory_question and not memory_context:
-                        # For memory questions without context
-                        full_prompt = f"""
+                        elif is_memory_question and not memory_context:
+                            full_prompt = f"""
 Eres "Acompaña", un asistente especializado en Alzheimer.
 
 El usuario pregunta: "{user_message}"
@@ -213,74 +424,83 @@ No tengo recuerdos específicos guardados sobre este tema. Responde con empatía
 
 Tu respuesta (1-2 frases, ofreciendo ayuda):
 """
-                    else:
-                        # For normal conversation
-                        full_prompt = f"""
+                        else:
+                            full_prompt = f"""
 Eres "Acompaña", un asistente especializado en Alzheimer.
 
-{f"USER CONTEXT: {memory_context}" if memory_context else ""}
+{f"CONTEXTO DEL USUARIO: {memory_context}" if memory_context else ""}
 
 Usuario: {user_message}
 
 Tu respuesta (1-2 frases, tono afectuoso):
 """
-                    
-                    print(f"DEBUG: Prompt sent: {full_prompt}")
-                    
-                    # Send prompt to Gemini
-                    response = model.generate_content(full_prompt)
-                    ai_response = response.text.strip()
-                    
-                    print(f"DEBUG: Raw response: {ai_response}")
-                    
-                    # Logic to ensure memory mention (if relevant)
-                    if is_memory_question and memory_context:
-                        response_uses_memories = any(
-                            any(word in mem["content"].lower() for word in ai_response.lower().split()[:10])
-                            for mem in relevant_memories
-                        )
-                        
-                        if not response_uses_memories:
-                            print("DEBUG: Forcing memory mention...")
-                            # Create a response that DOES mention the memories
-                            memory_summary = ". ".join([mem["content"] for mem in relevant_memories[:2]])
-                            ai_response = f"Recuerdo que me contaste: {memory_summary}. ¡Son momentos muy especiales!"
-                        
-                    # Truncate response to 1-2 sentences
-                    sentences = [s.strip() for s in ai_response.split('.') if s.strip()]
-                    if len(sentences) > 2:
-                        ai_response = '. '.join(sentences[:2]) + '.'
-                    
-                    # Add confirmation message if a memory was saved
-                    if memory_saved and "recuerdo" not in ai_response.lower():
-                        ai_response += " ¡Qué bonito recuerdo! Lo guardaré en tu cofre especial."
-                        
-            except Exception as e:
-                print("Error Gemini API:", e)
-                traceback.print_exc()
-                
-                # Intelligent fallback response
-                if memory_saved:
-                    memory_count = len((await memory_manager.load_memory())["important_memories"])
-                    ai_response = f"¡Qué bonito recuerdo! Lo he guardado en tu cofre. Ya tienes {memory_count} recuerdos especiales conmigo."
-                elif memory_context and is_memory_question:
-                    # Manual response with found memories
-                    memory_list = "\n".join([f"- {mem['content']}" for mem in relevant_memories])
-                    ai_response = f"Tus recuerdos especiales:\n{memory_list}\n\n¿Te gustaría que hablemos más de alguno?"
-                else:
-                    ai_response = "Estoy aquí para acompañarte. ¿Podrías contarme más sobre lo que necesitas?"
 
-            # Save and send the final response
-            await memory_manager.save_conversation(user_message, ai_response)
-            await websocket.send_text(ai_response)
-            
-    except WebSocketDisconnect:
-        print("Client disconnected")
+                        print(f"DEBUG: Prompt enviado: {full_prompt}")
+
+                        # Gemini call
+                        response = model.generate_content(full_prompt)
+                        ai_response = response.text.strip()
+
+                        print(f"DEBUG: Respuesta cruda: {ai_response}")
+
+                        if is_memory_question and memory_context:
+                            response_uses_memories = any(
+                                any(word in mem["content"].lower() for word in ai_response.lower().split()[:10])
+                                for mem in relevant_memories
+                            )
+
+                            if not response_uses_memories:
+                                print("DEBUG: Forzando mención de recuerdos...")
+                                memory_summary = ". ".join([mem["content"] for mem in relevant_memories[:2]])
+                                ai_response = f"Recuerdo que me contaste: {memory_summary}. ¡Son momentos muy especiales!"
+
+                        # TODOOOOOOOO CHAGNE
+                        sentences = [s.strip() for s in ai_response.split('.') if s.strip()]
+                        if len(sentences) > 2:
+                            ai_response = '. '.join(sentences[:2]) + '.'
+
+                        if memory_saved and "recuerdo" not in ai_response.lower():
+                            ai_response += " ¡Qué bonito recuerdo! Lo guardaré en tu cofre especial."
+
+                except Exception as e:
+                    print("Error Gemini API:", e)
+                    traceback.print_exc()
+
+                    if memory_saved:
+                        memory_count = len((await memory_manager.load_memory())["important_memories"])
+                        ai_response = f"¡Qué bonito recuerdo! Lo he guardado en tu cofre. Ya tienes {memory_count} recuerdos especiales conmigo."
+                    elif memory_context and is_memory_question:
+                        memory_list = "\n".join([f"- {mem['content']}" for mem in relevant_memories])
+                        ai_response = f"Tus recuerdos especiales:\n{memory_list}\n\n¿Te gustaría que hablemos más de alguno?"
+                    else:
+                        ai_response = "Estoy aquí para acompañarte. ¿Podrías contarme más sobre lo que necesitas?"
+
+                try:
+                    await memory_manager.save_conversation(user_message, ai_response)
+                except Exception as e:
+                    print("Warning: fallo guardando conversación:", e)
+
+                try:
+                    payload = {"type": "message", "text": ai_response}
+                    await websocket.send_text(json.dumps(payload, ensure_ascii=False))
+                except Exception as e:
+                    print("Error enviando respuesta por websocket:", e)
+
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_text(json.dumps({"type":"ping","ts":datetime.now().timestamp()}, ensure_ascii=False))
+                except:
+                    pass
+                continue
+
+    except WebSocketDisconnect as ws_exc:
+        code = getattr(ws_exc, 'code', None)
+        print(f"🔌 Cliente desconectado. WebSocketDisconnect code={code}")
     except Exception as e:
-        print("Error in WebSocket:", e)
+        print(f"❌ Error en WebSocket: {e}")
         traceback.print_exc()
         try:
-            await websocket.send_text("Lo siento, ha ocurrido un error. Por favor inténtalo de nuevo.")
+            await websocket.send_text(json.dumps({"type":"error","text":"Lo siento, ha ocurrido un error. Por favor inténtalo de nuevo."}, ensure_ascii=False))
         except:
             pass
 
@@ -350,6 +570,187 @@ async def verify_memory_usage():
         "sample_memories": [mem["content"][:100] + "..." for mem in relevant_memories[:3]] if relevant_memories else []
     }
 
+
+# FAMILY MESSAGES ENDPOINTS
+
+@app.get("/family/messages")
+async def get_family_messages():
+    """Obtiene mensajes no leídos de familiares"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
+    
+    try:
+        all_messages = await telegram_bot.load_messages()
+        unread_messages = [msg for msg in all_messages if not msg.get("read", False)]
+        
+       
+        all_messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        unread_messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        return {
+            "messages": unread_messages,  
+            "all_messages": all_messages, 
+            "total_unread": len(unread_messages),
+            "total_messages": len(all_messages)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/family/messages/all")
+async def get_all_family_messages():
+    """Obtiene todos los mensajes familiares"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
+    
+    try:
+        messages = await telegram_bot.load_messages()
+        return {
+            "messages": messages,
+            "total": len(messages)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/family/messages/today")
+async def get_today_family_messages():
+    """Obtiene mensajes del día de hoy"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
+    
+    try:
+        messages = await telegram_bot.get_messages_today()
+        return {
+            "messages": messages,
+            "total": len(messages),
+            "date": datetime.now().strftime("%d/%m/%Y")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/family/messages/date/{date}")
+async def get_messages_by_date(date: str):
+    """Obtiene mensajes de una fecha específica (formato: dd-mm-yyyy)"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
+    
+    try:
+        # Change format from URL (dd-mm-yyyy) to internal format (dd/mm/yyyy)
+        date_formatted = date.replace("-", "/")
+        messages = await telegram_bot.get_messages_by_date(date_formatted)
+        return {
+            "messages": messages,
+            "total": len(messages),
+            "date": date_formatted
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/family/messages/{message_id}/read")
+async def mark_message_read(message_id: int):
+    """Marca un mensaje como leído"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
+    
+    try:
+        success = await telegram_bot.mark_as_read(message_id)
+        if success:
+            return {"message": "Mensaje marcado como leído", "message_id": message_id}
+        else:
+            raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ADMIN ENDPOINTS - auth users
+
+@app.get("/admin/authorized-users")
+async def get_authorized_users():
+    """Lista usuarios autorizados"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot no configurado")
+    
+    try:
+        users = await telegram_bot.load_authorized_users()
+        return {
+            "authorized_users": users,
+            "total": len(users)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/authorize-user")
+async def authorize_user(data: dict):
+    """Autoriza un nuevo usuario
+    Body: {"chat_id": 123456789}
+    """
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot no configurado")
+    
+    chat_id = data.get("chat_id")
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="chat_id requerido")
+    
+    try:
+        success = await telegram_bot.add_authorized_user(int(chat_id))
+        if success:
+            return {"message": f"Usuario {chat_id} autorizado correctamente"}
+        else:
+            return {"message": f"Usuario {chat_id} ya estaba autorizado"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/revoke-user")
+async def revoke_user(data: dict):
+    """Revoca autorización de un usuario
+    Body: {"chat_id": 123456789}
+    """
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot no configurado")
+    
+    chat_id = data.get("chat_id")
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="chat_id requerido")
+    
+    try:
+        success = await telegram_bot.remove_authorized_user(int(chat_id))
+        if success:
+            return {"message": f"Usuario {chat_id} revocado correctamente"}
+        else:
+            return {"message": f"Usuario {chat_id} no estaba en la lista"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/pending-requests")
+async def get_pending_requests():
+    """Muestra usuarios que intentaron usar el bot sin autorización"""
+    if not telegram_bot:
+        raise HTTPException(status_code=503, detail="Bot no configurado")
+    
+    try:
+        messages = await telegram_bot.load_messages()
+        authorized = await telegram_bot.load_authorized_users()
+        
+        
+        all_users = {}
+        for msg in messages:
+            cid = msg.get("chat_id")
+            sender = msg.get("sender_name")
+            if cid:
+                all_users[cid] = {
+                    "name": sender,
+                    "authorized": cid in authorized
+                }
+        
+        return {
+            "users": [
+                {"chat_id": cid, "name": info["name"], "authorized": info["authorized"]}
+                for cid, info in all_users.items()
+            ],
+            "total": len(all_users)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Frontend static file serving
 script_dir = os.path.dirname(__file__)
 project_root = os.path.abspath(os.path.join(script_dir, '..'))
@@ -369,11 +770,19 @@ else:
 
 @app.get("/")
 async def read_root():
-    # Serves the main index.html file
+   
     index_file = os.path.join(frontend_path, 'index.html')
     if os.path.exists(index_file):
         return FileResponse(index_file)
     return {"message": "Index not found."}
+
+@app.get("/favicon.ico")
+async def favicon():
+    path = os.path.join(frontend_path, "favicon.ico")
+    if os.path.exists(path):
+        return FileResponse(path)
+    
+    return FileResponse(os.path.join(frontend_path, 'index.html'))
 
 @app.get("/health")
 async def health_check():
@@ -382,8 +791,23 @@ async def health_check():
         "status": "running",
         "ai_provider": "google_gemini",
         "model": GEMINI_MODEL,
-        "gemini_configured": GEMINI_TOKEN is not None
+        "gemini_configured": GEMINI_TOKEN is not None,
+        "telegram_configured": telegram_bot is not None
     }
+
+# Events
+@app.on_event("startup")
+async def startup_event():
+    """Inicia el bot de Telegram al arrancar la app"""
+    if telegram_bot:
+        asyncio.create_task(telegram_bot.start_bot())
+        print("🤖 Bot de Telegram iniciándose...")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Detiene el bot al cerrar la app"""
+    if telegram_bot:
+        await telegram_bot.stop_bot()
 
 # Server execution
 if __name__ == "__main__":

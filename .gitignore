@@ -16,3 +16,9 @@ __pycache__/
 
 conversation_history.json
 user_memory.json
+authorized_users.json
+family_messages.json
+
+\backend\__pycache__\
+\backend\test_messages.py
+\backend\fix_old_messages.py
