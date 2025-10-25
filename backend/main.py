@@ -1105,8 +1105,20 @@ async def shutdown_event():
 #     print(f"Model: {GEMINI_MODEL}")
 #     uvicorn.run("main:app", host="localhost", port=8000, reload=True)
 
-import os
-PORT = int(os.environ.get("PORT", 10000))
+
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=False)
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Starting server on port {port}")
+    print(f"📊 Model: {GEMINI_MODEL}")
+    
+    host = "0.0.0.0" if os.environ.get("RENDER") else "localhost"
+    reload = not os.environ.get("RENDER") 
+    
+    uvicorn.run(
+        "main:app", 
+        host=host, 
+        port=port, 
+        reload=reload,
+        log_level="info"
+    )
