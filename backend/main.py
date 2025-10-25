@@ -13,9 +13,13 @@ import asyncio
 from googlesearch import search
 import traceback
 import google.generativeai as genai
-from telegram_bot import FamilyMessagesBot
 import re
 from datetime import datetime
+
+try:
+    from .telegram_bot import FamilyMessagesBot
+except ImportError:
+    from telegram_bot import FamilyMessagesBot
 
 SPANISH_MONTHS = {
     "enero": 1, "ene": 1,
