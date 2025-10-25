@@ -25,9 +25,6 @@
 
                 <div class="conversation-section">
                     <div id="conversation" class="conversation">
-                        <div class="message assistant-message">
-                            <strong>Compa:</strong> Hola querido usuario, soy Compa. Estoy aquí para ayudarte y conversar contigo. Puedes hablar en cualquier momento.
-                        </div>
                     </div>
                 </div>
 
@@ -40,12 +37,16 @@
 
                     <div class="family-controls">
                         <h3>💌 Mensajes de Familiares</h3>
-                        <button id="showFamilyMessages" class="family-button">
-                            Ver mensajes 
-                            <span id="unreadCount" class="badge"></span>
-                        </button>
+                        <div style="display:flex; gap:8px;">
+                            <button id="showFamilyMessages" class="family-button">
+                                Ver mensajes 
+                                <span id="unreadCount" class="badge"></span>
+                            </button>
+                            <span style="margin-left:auto;"><span id="unreadCount" class="badge"></span></span>
+                        </div>
                         <div id="familyMessagesList" class="family-list"></div>
-                    </div>
+                        </div>
+
                 </div>
             </div>
         </main>

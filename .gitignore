@@ -2,12 +2,14 @@ venv/
 env/
 .venv/
 .env/
-
+alz_venv/
+/alz_venv
 
 .env
 .flaskenv
 .settings
 
+.env.local
 
 __pycache__/
 *.pyc
@@ -22,3 +24,13 @@ family_messages.json
 \backend\__pycache__\
 \backend\test_messages.py
 \backend\fix_old_messages.py
+
+
+*.tmp
+*.log
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store

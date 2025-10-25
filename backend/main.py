@@ -6,6 +6,7 @@ import uvicorn
 import os
 import json
 import aiofiles
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 import asyncio
@@ -13,6 +14,24 @@ from googlesearch import search
 import traceback
 import google.generativeai as genai
 from telegram_bot import FamilyMessagesBot
+import re
+from datetime import datetime
+
+SPANISH_MONTHS = {
+    "enero": 1, "ene": 1,
+    "febrero": 2, "feb": 2,
+    "marzo": 3, "mar": 3,
+    "abril": 4, "abr": 4,
+    "mayo": 5, "may": 5,
+    "junio": 6, "jun": 6,
+    "julio": 7, "jul": 7,
+    "agosto": 8, "ago": 8,
+    "septiembre": 9, "sep": 9, "setiembre": 9, "sept": 9,
+    "octubre": 10, "oct": 10,
+    "noviembre": 11, "nov": 11,
+    "diciembre": 12, "dic": 12
+}
+
 
 load_dotenv()
 
@@ -40,7 +59,6 @@ GEMINI_MODEL = "gemini-2.5-flash-lite"  # DO NOT CHANGE THIS MODEL
 MEMORY_FILE = "user_memory.json"
 CONVERSATION_FILE = "conversation_history.json"
 
-# Telegram Bot Setup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 telegram_bot = None
 
@@ -49,20 +67,182 @@ if TELEGRAM_TOKEN:
 else:
     print("⚠️ TELEGRAM_BOT_TOKEN no configurado - funcionalidad de mensajes familiares deshabilitada")
 
+
 ALZHEIMER_PROMPT = """
-Eres "Acompaña", un asistente de voz compasivo especializado en ayudar a personas con Alzheimer.
+Eres "Compa", un compañero conversacional afectuoso que ofrece apoyo mediante escucha activa y conexión emocional.
 
-DIRECTIVAS ESTRICTAS:
-1. Paciencia infinita: Repite las respuestas con la misma calma las veces necesarias
-2. Lenguaje simple: Frases cortas, vocabulario básico, tono afectuoso
-3. No contradigas: Si menciona recuerdos inexactos, acompáñalos afectivamente
-4. Refuerzo positivo: Usa palabras como "querido/a", "valiente", "importante"
-5. Reorientación suave: Si está confundido, ofrece ayuda práctica sin correcciones
-6. Estímulos positivos: Sugiere actividades sencillas y placenteras
-7. Seguridad emocional: Transmite calma y estabilidad en cada respuesta
+REGLAS FUNDAMENTALES:
+⎔ Jamás menciones condiciones médicas ni uses términos clínicos
+⎔ Paciencia infinita - repite con calma las veces necesarias  
+⎔ Lenguaje simple: frases cortas, vocabulario básico, tono afectuoso
+⎔ Acompaña los recuerdos sin correcciones - prioriza la conexión emocional sobre la precisión factual
+⎔ Refuerzo positivo constante usando "querido/a", "valiente", "importante"
 
-Mantén las respuestas en 1-2 frases máximo.
+TÉCNICAS CONVERSACIONALES:
+
+⎔ **Preguntas evocadoras**: 
+   "Cuéntame sobre… parece un día feliz" / "¿Qué se sentía al bailar esta canción?"
+
+⎔ **Validación emocional**:
+   "Veo que esto te emociona mucho…" / "Me encanta escucharte hablar de esto"
+
+⎔ **Conexión afectiva**:
+   "Parece que extrañas mucho a tu mamá. Cuéntame cómo era ella"
+
+⎔ **Redirección positiva**:
+   Tras validar: "Eso suena maravilloso. ¿Y qué otras canciones te gustaban?"
+
+⎔ **Decisiones sencillas**:
+   "¿Te apetece más el jersey azul o el rojo?" / "¿Prefieres pasear por el parque o la calle principal?"
+
+⎔ **Observaciones del entorno**:
+   "Mira esos niños jugando, ¡cuánta energía!" / "¿No huele delicioso el pan recién hecho?"
+
+⎔ **Estímulos sensoriales**:
+   "¿Está bueno? ¿Le falta sal?" / "¿Qué te parece esta música? ¿Es suave para ti?"
+
+⎔ **Curiosidad genuina**:
+   "¡Ah, sí! ¿Y en qué trabajabas? Cuéntame qué era lo mejor" / "¿Cómo conociste a tu esposo? Debía ser especial"
+
+GESTIÓN PRÁCTICA:
+
+⎔ **Mensajes familiares**: 
+   - Confirmación breve: "Claro, voy a leerte los mensajes" / "Sí, tienes {count} mensajes"
+   - NUNCA describas contenido o enumeres en listas
+
+⎔ **Cofre de recuerdos**:
+   - Guarda automáticamente temas mencionados con afecto
+   - Reutiliza: "La última vez me contaste sobre [recuerdo], ¿quieres hablarme más?"
+
+⎔ **Conexión familiar**:
+   "Tu [familiar] te mandó un mensaje muy cariñoso" - fundamental para bienestar emocional
+
+FORMATO RESPUESTAS:
+• 1-2 frases máximo • Natural y conversacional • Tono afectuoso siempre prioritario
 """
+
+FAMILY_MESSAGES_PROMPT = """
+Eres "Compa", un compañero afectuoso.
+
+REGLAS ESTRICTAS MENSAJES:
+⎔ Solo confirma brevemente que leerás los mensajes
+⎔ NUNCA describas contenido de mensajes  
+⎔ NUNCA enumeres en formato lista
+⎔ 1 frase máxima - tono cálido
+⎔ Jamás menciones condiciones médicas
+
+EJEMPLOS CORRECTOS:
+• "Léeme los mensajes" → "Claro, voy a leerte los mensajes."
+• "¿Tengo mensajes?" → "Sí, tienes {count} mensajes."
+
+Usuario: "{user_message}"
+
+Respuesta (1 frase, tono afectuoso):
+"""
+def detect_message_intent(user_message):
+    """Detección más inteligente de intenciones sobre mensajes"""
+    lower_msg = user_message.lower()
+    
+  
+    immediate_read_keywords = [
+        "léeme", "lee", "leer", "dime", "cuéntame", "escucha", 
+        "ponme", "reproduce", "escuchar", "oír", "qué dice",
+        "qué escribió", "contenido", "mensaje", "recibir", "lee el"
+    ]
+    
+   
+    query_keywords = [
+        "tengo", "hay", "mensajes", "familiares", "familiar",
+        "alguno", "algún", "recibí", "llegó", "tienes"
+    ]
+    
+    
+    old_messages_keywords = [
+        "antiguos", "antiguo", "leídos", "pasados", "anteriores", 
+        "historial", "todos", "todos los", "todos mis"
+    ]
+    
+
+    date_keywords = ["del", "de fecha", "de"]
+    
+    has_immediate = any(keyword in lower_msg for keyword in immediate_read_keywords)
+    has_query = any(keyword in lower_msg for keyword in query_keywords)
+    has_old = any(keyword in lower_msg for keyword in old_messages_keywords)
+    has_date = any(keyword in lower_msg for keyword in date_keywords)
+    
+    explicit_date = parse_spanish_date_fragment(lower_msg) if any(word in lower_msg for word in ["del", "de"]) else None
+    
+    return {
+        "is_read_intent": has_immediate,
+        "is_query_intent": has_query,
+        "wants_old_messages": has_old,
+        "has_explicit_date": explicit_date is not None,
+        "explicit_date": explicit_date
+    }
+def detect_intent(user_message):
+    """Detecta la intención del usuario de manera más robusta"""
+    lower_msg = user_message.lower()
+    
+    read_keywords = [
+        "léeme", "lee", "leer", "dime", "cuéntame", "escucha", 
+        "qué dice", "qué escribió", "contenido", "mensaje", "recibir",
+        "ponme", "reproduce", "escuchar", "oír"
+    ]
+    
+    query_keywords = ["tengo", "hay", "mensajes", "nuevos", "familiares"]
+    
+    is_read_intent = any(keyword in lower_msg for keyword in read_keywords)
+    is_query_intent = any(keyword in lower_msg for keyword in query_keywords)
+    
+    return {
+        "is_read_intent": is_read_intent,
+        "is_query_intent": is_query_intent,
+        "wants_immediate_reading": is_read_intent
+    }
+
+def parse_spanish_date_fragment(text):
+    """
+    Intenta extraer una fecha en formato dd/mm[/yyyy] desde textos tipo:
+    "20 de octubre", "20 octubre 2025", "el 3 de mayo", "5/10", "05-10-2025".
+    Devuelve 'dd/mm/yyyy' o None si no la encuentra.
+    """
+    text = text.lower().strip()
+
+    
+    m = re.search(r'\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b', text)
+    if m:
+        d = int(m.group(1)); mo = int(m.group(2))
+        y = m.group(3)
+        if y:
+            y = int(y)
+            if y < 100:  
+                y += 2000
+        else:
+            y = datetime.now().year
+        try:
+            return f"{d:02d}/{mo:02d}/{int(y)}"
+        except Exception:
+            return None
+
+    #  detect "20 de octubre" o "20 octubre 2025"
+    m2 = re.search(r'\b(\d{1,2})\s*(?:de\s+)?([a-záéíóúñ]+)(?:\s+(\d{2,4}))?\b', text, flags=re.IGNORECASE)
+    if m2:
+        d = int(m2.group(1))
+        month_word = m2.group(2).lower()
+        y = m2.group(3)
+        month_num = SPANISH_MONTHS.get(month_word)
+        if month_num:
+            if y:
+                y = int(y)
+                if y < 100:
+                    y += 2000
+            else:
+                y = datetime.now().year
+            try:
+                return f"{d:02d}/{month_num:02d}/{int(y)}"
+            except Exception:
+                return None
+    return None
 
 def _try_decode_bytes(b: bytes):
     """
@@ -82,6 +262,38 @@ class MemoryManager:
     def __init__(self):
         self.memory_file = MEMORY_FILE
         self.conversation_file = CONVERSATION_FILE
+        
+    async def load_memory_from_client(self, client_data):
+        """Carga memoria desde datos enviados por el cliente"""
+        if client_data:
+            print("✅ Cargando memoria desde datos del cliente")
+            return client_data
+        else:
+            return await self.load_memory() 
+    
+    async def save_memory_for_client(self, memory_data):
+        """Prepara datos para que el cliente los guarde localmente"""
+        return memory_data
+    
+    async def load_conversation_from_client(self, client_data):
+        """Carga conversación desde datos del cliente"""
+        if client_data:
+            print("✅ Cargando conversación desde datos del cliente")
+            return client_data
+        else:
+            return await self.load_conversation_from_file()
+    
+    async def load_conversation_from_file(self):
+        """Carga conversación desde archivo (fallback)"""
+        try:
+            if os.path.exists(self.conversation_file):
+                async with aiofiles.open(self.conversation_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    return json.loads(content)
+            return []
+        except Exception as e:
+            print("Error cargando conversación:", e)
+            return []
         
     async def load_memory(self):
         if not os.path.exists(self.memory_file):
@@ -241,9 +453,9 @@ class MemoryManager:
                 "assistant": assistant_response
             }
             conversations.append(conversation_entry)
-            # Keep only the last 100 entries
-            if len(conversations) > 100:
-                conversations = conversations[-100:]
+            # Keep only the last 1000 entries
+            if len(conversations) > 1000:
+                conversations = conversations[-1000:]
             async with aiofiles.open(self.conversation_file, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(conversations, indent=2, ensure_ascii=False))
         except Exception as e:
@@ -251,6 +463,18 @@ class MemoryManager:
 
 memory_manager = MemoryManager()
 
+async def send_data_update_to_client(websocket, memory_data, conversation_data):
+    """Envía datos actualizados al cliente para guardar localmente"""
+    try:
+        update_data = {
+            "type": "data_update",
+            "user_memory": memory_data,
+            "conversation_history": conversation_data
+        }
+        await websocket.send_text(json.dumps(update_data, ensure_ascii=False))
+        print("📤 Datos actualizados enviados al cliente")
+    except Exception as e:
+        print("Error enviando actualización al cliente:", e)
 
 # WEBSOCKET
 
@@ -260,13 +484,33 @@ async def websocket_endpoint(websocket: WebSocket):
     print("✅ Nueva conexión WebSocket establecida")
     
     try:
-        user_memory = await memory_manager.load_memory()
+        client_data = None
         try:
-            await websocket.send_text(json.dumps({"type":"message","text":"Hola querido usuario. Soy Acompaña, tu asistente personal. Estoy aquí para ayudarte."}, ensure_ascii=False))
+            initial_msg = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            data = json.loads(initial_msg)
+            if data.get("type") == "initial_data":
+                client_data = data.get("data", {})
+                print("📥 Datos iniciales recibidos del cliente")
+        except (asyncio.TimeoutError, json.JSONDecodeError, KeyError):
+            print("ℹ️ Cliente no envió datos iniciales, usando archivos locales")
+        
+        user_memory = await memory_manager.load_memory_from_client(
+            client_data.get("user_memory") if client_data else None
+        )
+        
+        conversation_history = await memory_manager.load_conversation_from_client(
+            client_data.get("conversation_history") if client_data else None
+        )
+        try:
+            await websocket.send_text(json.dumps({"type":"message","text":"Hola querido usuario. Soy Compa, tu compañero personal. Estoy aquí para ayudarte y conversar contigo."}, ensure_ascii=False))
         except Exception as e:
             print("No se pudo enviar saludo inicial por WS:", e)
-        
+
+        awaiting_read_confirmation = False
+        pending_family_messages = []
+
         while True:
+
             try:
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=300.0)
                 raw = data.strip()
@@ -310,54 +554,63 @@ async def websocket_endpoint(websocket: WebSocket):
                     try:
                         print(f"🔍 Detectada solicitud de mensajes familiares: '{user_message}'")
                         
-                        if asking_today:
-                            today_messages = await telegram_bot.get_messages_today()
-                            print(f"📅 Mensajes de hoy encontrados: {len(today_messages)}")
-                            
-                            if today_messages:
-                                messages_text = []
-                                for msg in today_messages:
-                                    msg_str = f"{msg['sender_name']} te escribió a las {msg['time']}: {msg['message']}"
-                                    messages_text.append(msg_str)
-                                    if not msg.get('read'):
-                                        await telegram_bot.mark_as_read(msg['id'])
-                                
-                                ai_response = f"Tienes {len(today_messages)} mensaje{'s' if len(today_messages) > 1 else ''} de hoy. " + messages_text[0]
-                            else:
-                                ai_response = "No tienes mensajes nuevos de hoy, querida."
+                        
+                        intent = detect_message_intent(user_message)
+                        
+                        if intent["has_explicit_date"]:
+                            messages = await telegram_bot.get_messages_by_date(intent["explicit_date"])
+                            message_type = f"del {intent['explicit_date']}"
+                        elif intent["wants_old_messages"] or any(word in user_message.lower() for word in ["antiguos", "todos", "historial"]):
+                            # Todos los mensajes (antiguos)
+                            all_messages = await telegram_bot.load_messages()
+                            messages = all_messages
+                            message_type = "guardados"
                         else:
-                            unread = await telegram_bot.get_unread_messages()
-                            print(f"📬 Mensajes no leídos encontrados: {len(unread)}")
+                            messages = await telegram_bot.get_unread_messages()
+                            message_type = "nuevos"
+                        
+                        print(f"📬 Mensajes {message_type} encontrados: {len(messages)}")
+                        
+                        if messages:
+
+                            prompt = FAMILY_MESSAGES_PROMPT.format(
+                                count=len(messages),
+                                user_message=user_message
+                            )
                             
-                            if unread:
-                                first_msg = unread[0]
-                                date_str = first_msg.get('date', 'recientemente')
-                                time_str = first_msg.get('time', '')
-                                sender = first_msg.get('sender_name', 'un familiar')
-                                message_content = first_msg.get('message', '')
-                                
-                                if date_str != 'recientemente' and time_str:
-                                    ai_response = f"Sí, querida. Tienes {len(unread)} mensaje{'s' if len(unread) > 1 else ''} nuevo{'s' if len(unread) > 1 else ''}. El primero es de {sender} del día {date_str} a las {time_str}: {message_content}"
-                                else:
-                                    ai_response = f"Sí, querida. Tienes {len(unread)} mensaje{'s' if len(unread) > 1 else ''} nuevo{'s' if len(unread) > 1 else ''}. El primero es de {sender}: {message_content}"
-                                
-                                print(f"✅ Mensaje a narrar: {ai_response[:100]}")
-                                
-                                await telegram_bot.mark_as_read(first_msg['id'])
+                            try:
+                                model = genai.GenerativeModel(GEMINI_MODEL)
+                                generation_config = genai.types.GenerationConfig(
+                                    max_output_tokens=1000,
+                                    temperature=0.3
+                                )
+                                response = model.generate_content(prompt, generation_config=generation_config)
+                                ai_response = response.text.strip()
+                            except Exception as e:
+                                print("Error generando respuesta breve:", e)
+                                ai_response = f"Tienes {len(messages)} mensajes {message_type}."
+                            
+                            await websocket.send_text(json.dumps({
+                                "type": "message",
+                                "text": ai_response,
+                                "has_family_messages": True,
+                                "messages": messages[:100]  
+                            }, ensure_ascii=False))
+                            
+                            print(f"✅ Enviados {len(messages)} mensajes {message_type} para lectura")
+                            
+                        else:
+                            if intent["has_explicit_date"]:
+                                ai_response = f"No tienes mensajes del {intent['explicit_date']}, querida."
+                            elif intent["wants_old_messages"]:
+                                ai_response = "No tienes mensajes guardados todavía, querida."
                             else:
                                 ai_response = "No tienes mensajes nuevos de tus familiares en este momento, querida."
-                                print("ℹ️ No hay mensajes no leídos")
-                        
-                        try:
-                            await memory_manager.save_conversation(user_message, ai_response)
-                        except Exception as e:
-                            print("Warning: fallo guardando conversación:", e)
-                        
-                        try:
-                            payload = {"type": "message", "text": ai_response}
-                            await websocket.send_text(json.dumps(payload, ensure_ascii=False))
-                        except Exception as e:
-                            print("Error enviando respuesta por websocket:", e)
+                            
+                            await websocket.send_text(json.dumps({
+                                "type": "message", 
+                                "text": ai_response
+                            }, ensure_ascii=False))
                         
                         continue
                         
@@ -371,21 +624,51 @@ async def websocket_endpoint(websocket: WebSocket):
                             pass
                         continue
 
+
+
                 # search relevant memories
                 relevant_memories = await memory_manager.get_relevant_memories(user_message)
                 memory_context = ""
                 if relevant_memories:
-                    memory_context = " | ".join([mem["content"] for mem in relevant_memories])
-                    print(f"DEBUG: Recuerdos encontrados: {len(relevant_memories)}")
-                    print(f"DEBUG: Contexto de memoria: {memory_context}")
+                            memory_context = "\n".join([f"- {mem['content']}" for mem in relevant_memories])
+                        
+                full_prompt = f"""
+Eres "Compa", un compañero conversacional afectuoso.
 
-                important_keywords = ["recuerdo cuando", "me acuerdo de", "mi hijo", "mi hija", "mi esposo", "mi esposa", "cuando era joven", "mi nieto", "mi nieta", "qué ilusión", "me encantaba"]
+{f"RECUERDOS PREVIOS DEL USUARIO (usa estos en tu respuesta):\n{memory_context}" if memory_context else "No tengo recuerdos específicos sobre este tema."}
+
+Usuario: "{user_message}"
+
+Instrucciones:
+- Responde de manera natural y afectuosa
+- Si hay recuerdos previos, menciónalos sutilmente
+- 1-2 frases máximo, tono cálido
+- Haz preguntas abiertas cuando sea apropiado
+
+Respuesta:
+"""
+
+                important_keywords = [
+                    "recuerdo cuando", "me acuerdo de", "mi hijo", "mi hija", "mi esposo", "mi esposa", 
+                    "cuando era joven", "mi nieto", "mi nieta", "qué ilusión", "me encantaba",
+                    "mi mamá", "mi papá", "mi familia", "cuando era niño", "cuando era niña", 
+                    "en mi juventud", "aquellos tiempos", "me gustaba", "disfrutaba",
+                    "extraño", "extrañar", "nostalgia", "añoro", "añorar", "tiempo pasado",
+                    "cuando vivía", "cuando trabajaba", "mi infancia", "mi juventud"
+                ]
                 memory_saved = False
 
                 if any(keyword in user_message.lower() for keyword in important_keywords):
                     memory_saved = True
                     new_memory = await memory_manager.add_important_memory(user_message, "personal")
                     print(f"DEBUG: Recuerdo guardado: {new_memory['id']}")
+                                    
+                    updated_memory = await memory_manager.load_memory()
+                    await send_data_update_to_client(
+                        websocket, 
+                        updated_memory, 
+                        conversation_history
+                    )
 
                 try:
                     if not GEMINI_TOKEN:
@@ -403,7 +686,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         if is_memory_question and memory_context:
                             full_prompt = f"""
-Eres "Acompaña", un asistente especializado en Alzheimer. Responde con frases cortas y tono afectuoso.
+Eres "Compa", un asistente especializado en Alzheimer. Responde con frases cortas y tono afectuoso.
 
 INFORMACIÓN CRÍTICA - ESTOS SON LOS RECUERDOS REALES DEL USUARIO:
 {memory_context}
@@ -416,7 +699,7 @@ Tu respuesta (1-2 frases, mencionando los recuerdos):
 """
                         elif is_memory_question and not memory_context:
                             full_prompt = f"""
-Eres "Acompaña", un asistente especializado en Alzheimer.
+Eres "Compa", un asistente especializado en Alzheimer.
 
 El usuario pregunta: "{user_message}"
 
@@ -426,7 +709,7 @@ Tu respuesta (1-2 frases, ofreciendo ayuda):
 """
                         else:
                             full_prompt = f"""
-Eres "Acompaña", un asistente especializado en Alzheimer.
+Eres "Compa", un asistente especializado en Alzheimer.
 
 {f"CONTEXTO DEL USUARIO: {memory_context}" if memory_context else ""}
 
@@ -445,7 +728,7 @@ Tu respuesta (1-2 frases, tono afectuoso):
 
                         if is_memory_question and memory_context:
                             response_uses_memories = any(
-                                any(word in mem["content"].lower() for word in ai_response.lower().split()[:10])
+                                any(word in mem["content"].lower() for word in ai_response.lower().split()[:100])
                                 for mem in relevant_memories
                             )
 
@@ -477,6 +760,13 @@ Tu respuesta (1-2 frases, tono afectuoso):
 
                 try:
                     await memory_manager.save_conversation(user_message, ai_response)
+                    conversation_history = await memory_manager.load_conversation_from_file()
+                    updated_memory = await memory_manager.load_memory()
+                    await send_data_update_to_client(
+                        websocket, 
+                        updated_memory, 
+                        conversation_history
+                    )
                 except Exception as e:
                     print("Warning: fallo guardando conversación:", e)
 
@@ -810,7 +1100,13 @@ async def shutdown_event():
         await telegram_bot.stop_bot()
 
 # Server execution
+# if __name__ == "__main__":
+#     print("Starting server with Google Gemini API")
+#     print(f"Model: {GEMINI_MODEL}")
+#     uvicorn.run("main:app", host="localhost", port=8000, reload=True)
+
+import os
+PORT = int(os.environ.get("PORT", 10000))
+
 if __name__ == "__main__":
-    print("Starting server with Google Gemini API")
-    print(f"Model: {GEMINI_MODEL}")
-    uvicorn.run("main:app", host="localhost", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=False)
