@@ -1518,22 +1518,15 @@ async def shutdown_event():
 # SERVER EXECUTION - Main entry point
 # ============================================
 
+
 if __name__ == "__main__":
-    # Determine port from environment or use default 8000
     port = int(os.environ.get("PORT", 8000))
     print(f"🚀 Starting server on port {port}")
-    print(f"📊 Model: {GEMINI_MODEL}")
     
-    # Use 0.0.0.0 for production (Render), localhost for development
-    host = "0.0.0.0" if os.environ.get("RENDER") else "localhost"
-    # Enable reload only in development mode
-    reload = not os.environ.get("RENDER") 
-    
-    # Start Uvicorn server with specified configuration
     uvicorn.run(
         "main:app", 
-        host=host, 
-        port=port, 
-        reload=reload,
+        host="0.0.0.0", 
+        port=port,
+        reload=False,
         log_level="info"
     )
