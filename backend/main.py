@@ -20,12 +20,8 @@ import uuid
 from collections import defaultdict
 
 # Import custom Telegram bot handler (fallback to local import if package not found)
-try:
-    from .telegram_bot import FamilyMessagesBot
-    from .telegram_bot import set_device_manager
-except ImportError:
-    from telegram_bot import FamilyMessagesBot
-    from telegram_bot import set_device_manager
+from telegram_bot import set_device_manager
+from telegram_bot import FamilyMessagesBot
 
 # Dictionary mapping Spanish month names to month numbers for date parsing
 SPANISH_MONTHS = {
