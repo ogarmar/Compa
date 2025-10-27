@@ -1,76 +1,120 @@
 <!DOCTYPE html>
+<!-- Document type declaration for HTML5 -->
 <html lang="es">
 <head>
+    <!-- Character encoding: UTF-8 for proper text handling and special characters -->
     <meta charset="UTF-8">
+    <!-- Viewport configuration for responsive design on mobile and desktop devices -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Page title displayed in browser tab -->
     <title>Compa - Asistente personal</title>
+    <!-- Link to external CSS stylesheet for styling -->
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <!-- Main container wrapper for all page content -->
     <div class="container">
+        <!-- Header section with app title and subtitle -->
         <header>
             <h1>🧠 Compa</h1>
+            <!-- Subtitle describing the app's purpose -->
             <p>Tu asistente de voz</p>
         </header>
 
+        <!-- Main content area -->
         <main>
+            <!-- Device connection status panel: Shows if device is connected/waiting -->
             <div class="device-panel">
-    <div id="deviceInfo" class="device-info">
-        Cargando información del dispositivo...
-    </div>
-</div>
+                <div id="deviceInfo" class="device-info">
+                    <!-- JavaScript will populate device connection status here -->
+                    Cargando información del dispositivo...
+                </div>
+            </div>
+
+            <!-- Assistant interface container -->
             <div class="assistant-container">
+                <!-- Voice interaction section with microphone button -->
                 <div class="voice-section">
+                    <!-- Microphone button for voice input control -->
                     <button id="micButton" class="mic-button">
+                        <!-- Microphone emoji icon -->
                         <span class="mic-icon">🎤</span>
+                        <!-- Status text shown on button -->
                         <span class="mic-text">ESCUCHANDO...</span>
                     </button>
+                    <!-- Status indicator showing current listening state -->
                     <div id="status" class="status status-listening">Escuchando continuamente... 🎤</div>
                 </div>
 
+                <!-- Conversation display area: Shows chat messages between user and assistant -->
                 <div class="conversation-section">
+                    <!-- Scrollable container for message history -->
                     <div id="conversation" class="conversation">
+                        <!-- JavaScript populates messages here dynamically -->
                     </div>
                 </div>
 
+                <!-- Control panels section: Memory and family messages -->
                 <div class="controls-section">
+                    <!-- Memory storage panel: Displays remembered facts about the user -->
                     <div class="memory-controls">
+                        <!-- Section title with heart emoji -->
                         <h3>💝 Cofre de los Recuerdos</h3>
+                        <!-- Button to toggle memory list visibility -->
                         <button id="showMemories" class="memory-button">Ver mis recuerdos</button>
+                        <!-- Container for memory items populated by JavaScript -->
                         <div id="memoryList" class="memory-list"></div>
                     </div>
 
+                    <!-- Family messages panel: Displays messages from family members -->
                     <div class="family-controls">
+                        <!-- Section title with envelope emoji -->
                         <h3>💌 Mensajes de Familiares</h3>
+                        <!-- Button row with message display and notification badge -->
                         <div style="display:flex; gap:8px;">
+                            <!-- Button to show family messages with unread count badge -->
                             <button id="showFamilyMessages" class="family-button">
                                 Ver mensajes 
+                                <!-- Badge showing number of unread messages -->
                                 <span id="unreadCount" class="badge"></span>
                             </button>
+                            <!-- Secondary unread count display (right-aligned) -->
                             <span style="margin-left:auto;"><span id="unreadCount" class="badge"></span></span>
                         </div>
+                        <!-- Container for family message items populated by JavaScript -->
                         <div id="familyMessagesList" class="family-list"></div>
-                        </div>
-
+                    </div>
                 </div>
             </div>
         </main>
 
+        <!-- Footer section: App name and tagline -->
         <footer>
             <p>Compa - Tu compañero de voz 💙</p>
         </footer>
     </div>
 
+    <!-- Link to external JavaScript file with version query parameter for cache busting -->
     <script src="/static/app.js?v=3.0"></script>
+
+    <!-- Modal dialog for connection requests from Telegram users -->
+    <!-- Initially hidden with display:none; shown via JavaScript when needed -->
     <div id="connectionRequestModal" class="modal" style="display:none;">
-    <div class="modal-content">
-        <h2>🔔 Solicitud de Conexión</h2>
-        <div id="connectionRequestInfo"></div>
-        <div class="modal-actions">
-            <button id="approveConnectionBtn" class="btn-approve">✅ Aprobar</button>
-            <button id="rejectConnectionBtn" class="btn-reject">❌ Rechazar</button>
+        <!-- Modal dialog box content -->
+        <div class="modal-content">
+            <!-- Modal title with notification icon -->
+            <h2>🔔 Solicitud de Conexión</h2>
+            <!-- Container for connection request details (user info, etc.) -->
+            <!-- Populated by JavaScript with sender name and timestamp -->
+            <div id="connectionRequestInfo"></div>
+            <!-- Action buttons container -->
+            <div class="modal-actions">
+                <!-- Approve button: Accept the connection request from Telegram user -->
+                <button id="approveConnectionBtn" class="btn-approve">✅ Aprobar</button>
+                <!-- Reject button: Deny the connection request from Telegram user -->
+                <button id="rejectConnectionBtn" class="btn-reject">❌ Rechazar</button>
+            </div>
         </div>
     </div>
-</div>
 </body>
 </html>

@@ -1,25 +1,38 @@
+// Check if app.js has already been loaded to prevent duplicate execution
 if (window.__ACOMPANIA_APPJS_LOADED) {
   console.warn('app.js ya inicializado — evitando ejecución duplicada');
 } else {
+  // Set flag to indicate app.js is loaded
   window.__ACOMPANIA_APPJS_LOADED = true;
 
   (function () {
-    // CONFIG
+    // ============================================
+    // CONFIG - Application settings and constants
+    // ============================================
+    // Construct WebSocket URL based on current protocol (http/https)
     const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+    // RMS (Root Mean Square) threshold for audio detection sensitivity
     let rmsThreshold = 0.17; 
+    // Milliseconds of silence needed before sending recognized text
     const SILENCE_TO_SEND_MS = 1000;
+    // Milliseconds interval for WebSocket keep-alive ping messages
     const KEEPALIVE_MS = 60000;
+    // Delay before restarting speech recognition after it stops
     const RESTART_RECOGNITION_DELAY_MS = 300;
+    // Enable detailed console logging for debugging
     const VERBOSE = false;
 
-    // Local Storage Manager
+    // ============================================
+    // LocalStorageManager - Persistent data storage
+    // ============================================
     class LocalStorageManager {
       constructor() {
+          // Key used to store all app data in browser localStorage
           this.storageKey = 'alzheimer_app_data';
       }
 
+      // Generate a unique 6-digit code for device identification
       generateDeviceCode() {
-          // Genera código de 6 dígitos único
           let code;
           do {
               code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -27,17 +40,18 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           return code;
       }
 
+      // Generate unique device ID in format: device_XXXXXX
       generateUniqueDeviceId() {
-          // Formato: device_XXXXXX (6 dígitos únicos)
           const code = this.generateDeviceCode();
           return `device_${code}`;
       }
 
+      // Save application data to localStorage
       saveData(data) {
           try {
               const currentData = this.loadData() || {};
               
-              // IMPORTANTE: Preservar device_id y device_code originales
+              // IMPORTANT: Preserve original device_id and device_code to avoid conflicts
               const dataToSave = {
                   device_id: data.device_id || currentData.device_id || this.generateUniqueDeviceId(),
                   device_code: data.device_code || currentData.device_code || this.generateDeviceCode(),
@@ -56,13 +70,14 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           }
       }
 
+      // Load application data from localStorage
       loadData() {
           try {
               const saved = localStorage.getItem(this.storageKey);
               if (saved) {
                   const data = JSON.parse(saved);
                   
-                  // Validar que tenga los campos necesarios
+                  // Validate that required fields exist; regenerate if corrupted
                   if (!data.device_id || !data.device_code) {
                       console.warn('⚠️ Datos corruptos, regenerando...');
                       const newData = this.createInitialData();
@@ -73,7 +88,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
                   console.log(`📂 Datos locales cargados - Device: ${data.device_id} - Código: ${data.device_code}`);
                   return data;
               } else {
-                  // Primera vez: crear datos iniciales
+                  // First time loading: create initial data structure
                   const initialData = this.createInitialData();
                   this.saveData(initialData);
                   return initialData;
@@ -86,9 +101,10 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           }
       }
 
+      // Create initial data structure for new devices
       createInitialData() {
           const device_id = this.generateUniqueDeviceId();
-          const device_code = device_id.split('_')[1]; // Extraer los 6 dígitos del device_id
+          const device_code = device_id.split('_')[1]; // Extract 6-digit code from device_id
           
           return {
               device_id: device_id,
@@ -105,16 +121,19 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           };
       }
 
+      // Retrieve stored device ID
       getDeviceId() {
           const data = this.loadData();
           return data ? data.device_id : null;
       }
 
+      // Retrieve stored device code
       getDeviceCode() {
           const data = this.loadData();
           return data ? data.device_code : null;
       }
 
+      // Clear all stored data from localStorage
       clearData() {
           try {
               localStorage.removeItem(this.storageKey);
@@ -124,7 +143,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           }
       }
 
-      // Método para regenerar código (solo en caso de conflicto)
+      // Regenerate device code in case of conflicts
       regenerateCode() {
           const data = this.loadData();
           const newCode = this.generateDeviceCode();
@@ -139,36 +158,47 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
   }
 
+    // Initialize storage manager instance
     const storageManager = new LocalStorageManager();
 
-    // state
-    let ws = null;
-    let keepaliveInterval = null;
-    let audioStream = null;
-    let audioCtx = null;
-    let analyser = null;
-    let recognition = null;
-    let recognitionActive = false;
-    let recognitionStarting = false;
-    let isSpeaking = false;            
-    let lastSpokenMessage = '';
-    let selectedVoice = null;
-    let speakEnabled = true;
-    let sendSilenceTimer = null;
-    let pendingFinal = '';
-    let uiConversation = document.querySelector('#conversation');
-    const btnId = 'showMemories';
-    const memoryListId = 'memoryList';
+    // ============================================
+    // STATE VARIABLES - Application state management
+    // ============================================
+    let ws = null;                               // WebSocket connection
+    let keepaliveInterval = null;                // Interval for keep-alive messages
+    let audioStream = null;                      // Audio stream from microphone
+    let audioCtx = null;                         // Web Audio API context
+    let analyser = null;                         // Audio analyser node for RMS calculation
+    let recognition = null;                      // SpeechRecognition instance
+    let recognitionActive = false;               // Flag: is speech recognition currently running
+    let recognitionStarting = false;             // Flag: is recognition in startup process
+    let isSpeaking = false;                      // Flag: is assistant currently speaking (TTS)
+    let lastSpokenMessage = '';                  // Track last spoken message to avoid repetition
+    let selectedVoice = null;                    // Selected voice for text-to-speech
+    let speakEnabled = true;                     // Global flag to enable/disable TTS
+    let sendSilenceTimer = null;                 // Timeout for sending recognized text after silence
+    let pendingFinal = '';                       // Buffer for final recognized transcripts
+    let uiConversation = document.querySelector('#conversation'); // Conversation display element
+    const btnId = 'showMemories';                // ID for memories button
+    const memoryListId = 'memoryList';           // ID for memories list container
 
-    // VOICE params
+    // ============================================
+    // VOICE PARAMETERS - Text-to-speech settings
+    // ============================================
     let voiceParams = { volume: 0.95, rate: 0.90, pitch: 0.92 };
 
+    // Track speech sessions to prevent race conditions
     let assistantSpeechSessionId = 0;
+    // Flag: is user currently speaking
     let userIsTalking = false;
 
+    // Track number of unread family messages
     let unreadMessagesCount = 0;
 
-    // DOM helper
+    // ============================================
+    // DOM HELPERS - Utility functions for DOM manipulation
+    // ============================================
+    // Ensure conversation container exists in DOM
     function ensureConversation() {
       if (!uiConversation) {
         uiConversation = document.querySelector('.conversation') || document.createElement('div');
@@ -178,33 +208,44 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // Add message to conversation display
     function appendConversation(author, text) {
       ensureConversation();
       const div = document.createElement('div');
+      // Classify message as assistant or user message based on author
       div.className = (author === 'Compa' || author === 'Compa' ? 'message assistant-message' : 'message user-message');
       div.innerHTML = `<strong>${author}:</strong> ${text}`;
       uiConversation.appendChild(div);
+      // Auto-scroll to newest message
       uiConversation.scrollTop = uiConversation.scrollHeight;
     }
 
+    // Get memory-related DOM elements
     function getMemoryElements() {
       const btn = document.getElementById(btnId);
       const list = document.getElementById(memoryListId);
       return { btn, list };
     }
 
-    // WebSocket
-
+    // ============================================
+    // WEBSOCKET - Server communication
+    // ============================================
+    // Establish WebSocket connection and set up event handlers
     function connectWebSocket() {
+    // Prevent duplicate connections
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     
+    // Load device data from storage
     const localData = storageManager.loadData();
     
+    // Create new WebSocket connection
     ws = new WebSocket(WS_URL);
 
+    // Handle WebSocket connection opened
     ws.addEventListener('open', () => {
         console.log('✅ WebSocket abierto', WS_URL);
         
+        // Send initial device data to server
         const initialData = {
             type: "initial_data",
             data: localData
@@ -213,20 +254,23 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         console.log('📤 Datos iniciales enviados al servidor');
     });
 
+    // Handle incoming messages from server
     ws.addEventListener('message', (ev) => {
         try {
             const parsed = JSON.parse(ev.data);
+            // Handle connection request from family member
             if (parsed && parsed.type === 'connection_request') {
             showConnectionRequestModal(parsed.request_id, parsed.user_info);
             return;
         }
         
-          // ⬇️ NUEVO: Manejar aprobación confirmada
+          // Handle connection approval confirmation
           if (parsed && parsed.type === 'connection_approved') {
               appendConversation('Sistema', `✅ ${parsed.user_name} se ha conectado correctamente`);
               updateDeviceInfo(storageManager.getDeviceCode(), parsed.chat_id);
               return;
           }
+            // Handle device information update from server
             if (parsed && parsed.type === 'device_info') {
                 console.log('📱 Información del dispositivo recibida:', parsed);
                     const updatedData = {
@@ -240,6 +284,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
                 return;
             }
             
+            // Handle bulk data update from server
             if (parsed && parsed.type === 'data_update') {
                 console.log('📥 Recibida actualización de datos del servidor');
                 storageManager.saveData({
@@ -249,10 +294,11 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
                 return;
             }
           
-          
+          // Handle text message from assistant
           if (parsed && parsed.type === 'message' && parsed.text) {
             handleServerText(parsed.text);
             
+            // If message includes family messages, read them aloud
             if (parsed.has_family_messages && Array.isArray(parsed.messages)) {
               console.log('📨 Mensajes familiares recibidos para lectura:', parsed.messages.length);
               
@@ -262,35 +308,44 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             }
             
           } 
+          // Handle family messages in legacy format
           else if (parsed && parsed.type === 'family_messages_to_read' && Array.isArray(parsed.messages)) {
             console.log('⚠️ Usando formato antiguo de mensajes familiares');
             handleServerText(`Tengo ${parsed.messages.length} mensajes para leerte.`);
             readFamilyMessagesSequence(parsed.messages);
           }
+          // Ignore WebSocket control messages (ping/pong)
           else if (parsed && (parsed.type === 'pong' || parsed.type === 'ping')) {
             if (VERBOSE) console.log('WS control:', parsed.type, parsed.ts || parsed);
           } else {
+            // Fallback: treat as plain text message
             handleServerText(ev.data);
           }
         } catch (e) {
+          // If JSON parsing fails, treat as plain text
           handleServerText(ev.data);
         }
       });
 
+      // Handle WebSocket connection closed
       ws.addEventListener('close', (ev) => {
         console.log('🔌 WebSocket cerrado', ev.code, ev.reason);
         if (keepaliveInterval) clearInterval(keepaliveInterval);
+        // Attempt reconnection after delay
         setTimeout(connectWebSocket, 1500);
       });
 
+      // Handle WebSocket errors
       ws.addEventListener('error', (err) => {
         console.error('⚠️ WebSocket error:', err);
       });
     }
 
+    // Process and display text from server
     function handleServerText(text) {
       console.log('📝 Mensaje del servidor:', text);
       appendConversation('Compa', text);
+      // Speak text only if user is not talking and TTS is enabled
       if (!userIsTalking && speakEnabled) {
         speakTextSoft(text);
       } else {
@@ -298,17 +353,19 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // Update device information display on UI
     function updateDeviceInfo(deviceCode, connectedChat) {
       const deviceInfoElement = document.getElementById('deviceInfo');
       if (!deviceInfoElement) return;
       
-      // Guardar el código en localStorage por si acaso
+      // Update stored device code if changed
       const localData = storageManager.loadData();
       if (localData.device_code !== deviceCode) {
           localData.device_code = deviceCode;
           storageManager.saveData(localData);
       }
       
+      // Show different UI based on connection status
       if (connectedChat) {
           deviceInfoElement.innerHTML = `
               <div class="device-connected">
@@ -336,12 +393,15 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
   }
 
+    // Send message to server via WebSocket
     function sendMessageToServer(text) {
       try {
+        // Ignore keep-alive control messages
         const maybe = JSON.parse(text);
         if (maybe && maybe.type === 'keepalive') return;
       } catch (e) { /* no-json */ }
 
+      // Ensure WebSocket is connected before sending
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         connectWebSocket();
         setTimeout(() => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(text); }, 600);
@@ -355,21 +415,26 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     }
 
 
-    // TTS more "natural" with session id and onComplete callback
-
+    // ============================================
+    // TEXT-TO-SPEECH (TTS) - Voice output functionality
+    // ============================================
+    // Load available voices and cache the best one
     function loadVoices() {
       return new Promise((resolve) => {
         const synth = window.speechSynthesis;
         let voices = synth.getVoices();
+        // If voices already loaded, use them immediately
         if (voices.length) {
           selectedVoice = chooseBestVoice(voices);
           resolve(voices);
         } else {
+          // Wait for voices to be loaded
           synth.onvoiceschanged = () => {
             voices = synth.getVoices();
             selectedVoice = chooseBestVoice(voices);
             resolve(voices);
           };
+          // Fallback timeout if voices never load
           setTimeout(() => {
             voices = synth.getVoices();
             selectedVoice = chooseBestVoice(voices);
@@ -379,37 +444,49 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       });
     }
 
+    // Select the best Spanish voice from available options
     function chooseBestVoice(voices) {
+      // Prioritize Spanish neural voices (most natural sounding)
       let candidates = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('es-') && v.name && /neural|google|wave|wavenet|tts|premium/i.test(v.name));
       if (candidates.length) return candidates[0];
+      // Fallback: any Spanish voice
       candidates = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('es-'));
       if (candidates.length) return candidates[0];
+      // Fallback: any high-quality voice
       candidates = voices.filter(v => v.name && /neural|google|wave|wavenet|tts|premium/i.test(v.name));
       if (candidates.length) return candidates[0];
+      // Last resort: use first available voice
       return voices[0] || null;
     }
 
+    // Speak text with natural pauses and segment management
     function speakTextSoft(text, options = {}) {
+      // Exit early if conditions not met for speech
       if (!text || !('speechSynthesis' in window) || !speakEnabled) return;
-      if (text === lastSpokenMessage) return;
+      if (text === lastSpokenMessage) return; // Prevent duplicate speech
       lastSpokenMessage = text;
 
+      // Create unique session ID to track this speech session
       assistantSpeechSessionId += 1;
       const mySession = assistantSpeechSessionId;
 
+      // Prepare for speech
       isSpeaking = true;
-      window.speechSynthesis.cancel();
-      stopRecognition();
+      window.speechSynthesis.cancel(); // Cancel any ongoing speech
+      stopRecognition();                // Stop listening during speech
 
+      // Split text into manageable segments (max 120 chars each)
       const rawSegments = text.split(/(?<=[.!?])\s+/).filter(Boolean);
       const segments = [];
       rawSegments.forEach(seg => {
         if (seg.length <= 120) segments.push(seg.trim());
         else {
+          // Further split long segments by commas
           const parts = seg.split(',').map(s => s.trim()).filter(Boolean);
           parts.forEach(p => {
             if (p.length <= 120) segments.push(p.trim());
             else {
+              // Split very long parts into 110-char chunks
               for (let i = 0; i < p.length; i += 110) segments.push(p.slice(i, i + 110).trim());
             }
           });
@@ -419,18 +496,22 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       const synth = window.speechSynthesis;
       let i = 0;
 
+      // Recursively speak each segment
       function speakNext() {
+        // Check if this session was cancelled
         if (mySession !== assistantSpeechSessionId) {
           isSpeaking = false;
           lastSpokenMessage = '';
           return;
         }
 
+        // When all segments spoken, clean up
         if (i >= segments.length) {
           isSpeaking = false;
           setTimeout(async () => {
             lastSpokenMessage = '';
             
+            // Execute optional callback when speech complete
             try {
               if (options && typeof options.onComplete === 'function') {
                 await options.onComplete();
@@ -438,22 +519,27 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             } catch (err) {
               console.error('onComplete callback error:', err);
             }
+            // Resume listening if user stopped talking
             if (!userIsTalking) startRecognition();
             else console.log('Usuario sigue hablando; reconocimiento se reanudará cuando pare.');
           }, 200);
           return;
         }
 
+        // Create speech utterance for current segment
         const s = segments[i];
         const utter = new SpeechSynthesisUtterance(s);
         if (selectedVoice) utter.voice = selectedVoice;
         utter.volume = voiceParams.volume;
+        // Vary speech rate slightly for more natural rhythm
         const baseRate = voiceParams.rate;
         const variation = (i % 2 === 0) ? 0.98 : 1.02;
         utter.rate = Math.max(0.5, Math.min(2.0, baseRate * variation));
         utter.pitch = voiceParams.pitch;
 
+        // Move to next segment when current finishes
         utter.onend = () => {
+          // Add random pause between segments for naturalness
           const pause = 360 + Math.floor(Math.random() * 120);
           setTimeout(() => {
             i += 1;
@@ -461,12 +547,14 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           }, pause);
         };
 
+        // Handle TTS errors gracefully
         utter.onerror = (e) => {
           console.warn('TTS error', e.error || e);
           i += 1;
           speakNext();
         };
 
+        // Attempt to speak segment
         try {
           synth.speak(utter);
         } catch (e) {
@@ -479,11 +567,13 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       speakNext();
     }
 
+    // Stop assistant speech when user starts talking
     function interruptAssistantSpeechForUser() {
       if (!isSpeaking && assistantSpeechSessionId === 0) {
         userIsTalking = true;
         return;
       }
+      // Increment session ID to invalidate ongoing speech
       assistantSpeechSessionId += 1;
       try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
       isSpeaking = false;
@@ -491,45 +581,57 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       console.log('Asistente interrumpido por usuario — TTS cancelado.');
     }
 
+    // Mark user as stopped talking and resume listening
     function userStoppedTalking() {
       userIsTalking = false;
       if (!isSpeaking) startRecognition();
       console.log('Usuario dejó de hablar — userIsTalking=false');
     }
 
-    // Audio detection (RMS)
+    // ============================================
+    // AUDIO DETECTION - RMS-based voice activity detection
+    // ============================================
+    // Initialize audio stream and RMS monitoring
     async function initAudioDetection(onLevel) {
       try {
+        // Check browser support for microphone access
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('getUserMedia no soportado');
         }
+        // Request microphone access
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Create Web Audio context for analysis
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const source = audioCtx.createMediaStreamSource(audioStream);
         analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 2048;
+        analyser.fftSize = 2048; // FFT size affects frequency resolution
         source.connect(analyser);
         const bufferLength = analyser.fftSize;
         const data = new Float32Array(bufferLength);
 
+        // State tracking for voice detection
         let wasAbove = false;
         let lastAboveTs = 0;
-        const MIN_SPEAK_MS = 250;
-        const MIN_SILENCE_MS = 2000;
+        const MIN_SPEAK_MS = 250;         // Minimum duration to register as speech
+        const MIN_SILENCE_MS = 2000;      // Duration of silence needed to end speech
 
+        // Continuously measure audio levels
         function measure() {
           analyser.getFloatTimeDomainData(data);
+          // Calculate RMS (Root Mean Square) for amplitude
           let sum = 0;
           for (let i = 0; i < bufferLength; i++) sum += data[i] * data[i];
           const rms = Math.sqrt(sum / bufferLength);
-          onLevel(rms);
+          onLevel(rms); // Report level to caller
 
           const now = Date.now();
+          // Detect when audio crosses above threshold
           if (rms > rmsThreshold) {
             if (!wasAbove) {
               lastAboveTs = now;
               wasAbove = true;
             } else {
+              // Confirm speech after minimum duration
               if (!userIsTalking && (now - lastAboveTs) >= MIN_SPEAK_MS) {
                 userIsTalking = true;
                 interruptAssistantSpeechForUser();
@@ -537,35 +639,41 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
               }
             }
           } else {
+            // Handle audio dropping below threshold
             if (wasAbove) {
               const silenceStart = now;
+              // Wait for sustained silence to confirm speech ended
               (function waitSilence() {
                 analyser.getFloatTimeDomainData(data);
                 let ssum = 0;
                 for (let i = 0; i < bufferLength; i++) ssum += data[i] * data[i];
                 const currentRms = Math.sqrt(ssum / bufferLength);
                 if (currentRms <= rmsThreshold) {
+                  // Double-check silence after minimum duration
                   setTimeout(() => {
                     analyser.getFloatTimeDomainData(data);
                     let ssum2 = 0;
                     for (let i = 0; i < bufferLength; i++) ssum2 += data[i] * data[i];
                     const currentRms2 = Math.sqrt(ssum2 / bufferLength);
                     if (currentRms2 <= rmsThreshold) {
+                      // Confirm speech has ended
                       if (userIsTalking) {
                         userStoppedTalking();
                       }
                       wasAbove = false;
                     } else {
+                      // False alarm: sound detected again, keep waiting
                       setTimeout(waitSilence, MIN_SILENCE_MS);
                     }
                   }, MIN_SILENCE_MS);
                 } else {
-                  // still sound
+                  // still sound detected, keep monitoring
                 }
               })();
             }
           }
 
+          // Schedule next measurement
           requestAnimationFrame(measure);
         }
         requestAnimationFrame(measure);
@@ -577,8 +685,10 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
-    // SpeechRecognition
-
+    // ============================================
+    // SPEECH RECOGNITION - User voice-to-text conversion
+    // ============================================
+    // Initialize Web Speech API recognition engine
     function initRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
@@ -586,35 +696,43 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         return null;
       }
       const rec = new SpeechRecognition();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = 'es-ES';
+      rec.continuous = true;           // Keep listening continuously
+      rec.interimResults = true;       // Provide interim results while speaking
+      rec.lang = 'es-ES';              // Set language to Spanish
 
       let finalBufferLocal = '';
 
+      // Recognition started successfully
       rec.onstart = () => {
         recognitionActive = true;
         recognitionStarting = false;
       };
 
+      // Process speech recognition results
       rec.onresult = (event) => {
+        // Ignore recognition results while assistant is speaking
         if (isSpeaking) {
           if (VERBOSE) console.log('Ignorando resultado por TTS activo');
           return;
         }
         let interim = '';
+        // Process all results since last event
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
+            // Final result: buffer for sending
             finalBufferLocal += transcript + ' ';
           } else {
+            // Interim result: display in real-time
             interim += transcript;
           }
         }
 
+        // Send buffered final transcripts after silence
         if (finalBufferLocal.trim()) {
           pendingFinal = finalBufferLocal.trim();
           finalBufferLocal = '';
+          // Reset silence timer for new final result
           if (sendSilenceTimer) clearTimeout(sendSilenceTimer);
           sendSilenceTimer = setTimeout(() => {
             if (pendingFinal) {
@@ -631,16 +749,20 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         }
       };
 
+      // Handle recognition errors
       rec.onerror = (e) => {
         console.warn('Error reconocimiento:', e.error);
+        // Stop if permission denied
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           stopRecognition();
         }
       };
 
+      // Recognition ended (either by user or error)
       rec.onend = () => {
         recognitionActive = false;
         recognitionStarting = false;
+        // Restart recognition if still in focus
         setTimeout(() => {
           if (document.visibilityState === 'visible' && !isSpeaking && !userIsTalking) startRecognition();
         }, RESTART_RECOGNITION_DELAY_MS);
@@ -648,11 +770,15 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
       return rec;
     }
+      
 
+    // Start listening for user speech
     async function startRecognition() {
+      // Prevent duplicate start attempts
       if (recognitionActive || recognitionStarting) return;
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return;
+      // Initialize recognition engine if not already created
       if (!recognition) recognition = initRecognition();
       if (!recognition) return;
       recognitionStarting = true;
@@ -664,6 +790,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // Stop listening for user speech
     function stopRecognition() {
       if (recognition && recognitionActive) {
         try {
@@ -675,15 +802,21 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     }
 
 
+    // ============================================
+    // MEMORIES - User memory management and display
+    // ============================================
+    // Fetch and display user memories from server
     async function showMyMemoriesUI() {
       const btn = document.getElementById(btnId);
       const list = document.getElementById(memoryListId);
       try {
+        // Disable button and show loading state
         if (btn) {
           btn.disabled = true;
           btn.textContent = 'Cargando recuerdos...';
         }
         
+        // Get device ID needed to fetch memories
         const deviceId = storageManager.getDeviceId();
         if (!deviceId) {
           appendConversation('Compa', 'No he podido identificar tu dispositivo. Intenta recargar la página.');
@@ -691,11 +824,13 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           return;
         }
         
+        // Fetch memories from server
         const resp = await fetch(`/memory/cofre?device_id=${encodeURIComponent(deviceId)}`);
         if (!resp.ok) throw new Error('Error fetching memories: ' + resp.status);
         const data = await resp.json();
         const memories = data.important_memories || [];
         
+        // Clear previous list display
         if (list) list.innerHTML = '';
         if (!memories.length) {
           appendConversation('Compa', 'No tienes recuerdos guardados todavía.');
@@ -703,6 +838,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           return;
         }
         
+        // Display memories (max 100) in the list
         const maxShow = 100;
         const toShow = memories.slice(0, maxShow);
         toShow.forEach((m, idx) => {
@@ -717,26 +853,35 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         appendConversation('Compa', 'No he podido recuperar tus recuerdos ahora.');
         speakTextSoft('Lo siento, no he podido recuperar tus recuerdos ahora.');
       } finally {
+        // Re-enable button
         const btn2 = document.getElementById(btnId);
         if (btn2) { btn2.disabled = false; btn2.textContent = 'Ver mis recuerdos'; }
       }
     }
 
-    // Family messages
-
+    // ============================================
+    // FAMILY MESSAGES - Family communication feature
+    // ============================================
+    // Fetch and display family messages from server
     async function loadFamilyMessages() {
       const deviceId = storageManager.getDeviceId();
+      if (!deviceId) {
+        console.error('❌ No device_id available');
+        return;
+      }
       const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
       const btn = document.getElementById('showFamilyMessages');
       const list = document.getElementById('familyMessagesList');
       const countBadge = document.getElementById('unreadCount');
 
       try {
+        // Show loading state with badge for unread count
         if (btn) {
           btn.disabled = true;
           btn.innerHTML = 'Cargando mensajes... <span id="unreadCount" class="badge"></span>';
         }
 
+        // Fetch all family messages
         const resp = await fetch('/family/messages');
         if (!resp.ok) {
           if (resp.status === 503) {
@@ -748,13 +893,16 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
         const data = await resp.json();
         const messages = data.all_messages || [];
+        // Calculate unread messages count
         unreadMessagesCount = data.total_unread || messages.filter(m => !m.read).length;
 
+        // Update unread badge display
         if (countBadge) {
           countBadge.textContent = unreadMessagesCount > 0 ? unreadMessagesCount : '';
           countBadge.style.display = unreadMessagesCount > 0 ? 'inline-block' : 'none';
         }
 
+        // Clear previous messages display
         if (list) list.innerHTML = '';
 
         if (!messages.length) {
@@ -766,14 +914,19 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           return;
         }
 
+        // Sort messages by newest first
         messages.sort((a,b) => (new Date(b.timestamp || 0)) - (new Date(a.timestamp || 0)));
+        // Display up to 50 most recent messages
         messages.slice(0, 50).forEach((msg) => {
           const el = document.createElement('div');
+          // Add 'unread' class if message not yet read
           el.className = 'family-item' + (msg.read ? '' : ' unread');
 
+          // Extract date and time from message
           const date = msg.date || (msg.timestamp ? new Date(msg.timestamp).toLocaleDateString('es-ES') : '—');
           const time = msg.time || (msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'}) : '');
 
+          // Build HTML for message display with sender info, date, and action buttons
           el.innerHTML = `
             <div class="family-item-header">
               <span class="family-item-sender">👤 ${msg.sender_name || 'Desconocido'}</span>
@@ -787,6 +940,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             </div>
           `;
 
+          // "Read" button: speak message aloud and mark as read
           const readBtn = el.querySelector('.btn-read');
           if (readBtn) {
             readBtn.addEventListener('click', (e) => {
@@ -795,6 +949,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
               const readText = `Mensaje de ${msg.sender_name || 'un familiar'} del ${date} a las ${time}: ${msg.message}`;
               appendConversation('Compa', readText);
 
+              // Speak message, then mark as read when done
               speakTextSoft(readText, {
                 onComplete: async () => {
                   try {
@@ -812,6 +967,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             });
           }
 
+          // "Mark as read" button: mark message as read without speaking
           const markBtn = el.querySelector('.btn-mark-read');
           if (markBtn) {
             markBtn.addEventListener('click', async (ev) => {
@@ -834,6 +990,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           if (list) list.appendChild(el);
         });
 
+        // Notify user about unread messages
         const unreadOnly = messages.filter(m => !m.read);
         if (unreadOnly.length > 0 && speakEnabled && !isSpeaking) {
           const summary = unreadOnly.length === 1 
@@ -847,6 +1004,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         console.error('loadFamilyMessages error', e);
         appendConversation('Compa', 'No he podido cargar los mensajes ahora.');
       } finally {
+        // Re-enable button
         const btn2 = document.getElementById('showFamilyMessages');
         if (btn2) {
           btn2.disabled = false;
@@ -855,11 +1013,18 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // Mark a specific message as read on the server
     async function markMessageAsRead(messageId) {
       try {
+        const deviceId = storageManager.getDeviceId();
+        if (!deviceId) {
+          console.error('❌ No device_id available for markAsRead');
+          return false;
+        }
+        
         console.log(`🔄 Enviando petición para marcar mensaje ${messageId} como leído`);
         
-        const resp = await fetch(`/family/messages/${messageId}/read`, { 
+        const resp = await fetch(`/family/messages/${messageId}/read?device_id=${encodeURIComponent(deviceId)}`, { 
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -881,6 +1046,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // Read multiple family messages aloud in sequence
     async function readFamilyMessagesSequence(messages) {
       if (!messages || messages.length === 0) {
         console.log('❌ No hay mensajes para leer');
@@ -889,12 +1055,14 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
       console.log(`🔊 Iniciando lectura de ${messages.length} mensajes`);
 
+      // Process each message in order
       for (const [index, msg] of messages.entries()) {
         try {
           const messageText = `De ${msg.sender_name || 'un familiar'}: ${msg.message}`;
           
           appendConversation('Compa', `📨 ${msg.sender_name}: ${msg.message}`);
           
+          // Speak message if TTS enabled
           if (speakEnabled) {
             await new Promise(resolve => {
               speakTextSoft(messageText, { onComplete: resolve });
@@ -903,7 +1071,8 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
           console.log(`📝 Marcando mensaje ${msg.id} como leído`);
           try {
-            const response = await fetch(`/family/messages/${msg.id}/read`, {
+            const deviceId = storageManager.getDeviceId();
+            const response = await fetch(`/family/messages/${msg.id}/read?device_id=${encodeURIComponent(deviceId)}`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -920,6 +1089,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             console.error(`Error marcando mensaje ${msg.id}:`, err);
           }
 
+          // Add pause between messages for readability
           if (index < messages.length - 1) {
             await new Promise(r => setTimeout(r, 800));
           }
@@ -929,6 +1099,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         }
       }
 
+      // Conclude message reading session
       const finalText = "Esos son todos los mensajes. ¿En qué más puedo ayudarte?";
       appendConversation('Compa', finalText);
       if (speakEnabled && !isSpeaking) {
@@ -936,11 +1107,13 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // Update message status in UI after it's marked as read
     function updateMessageInUI(messageId) {
       const messageElements = document.querySelectorAll('.family-item');
       messageElements.forEach(element => {
         const btn = element.querySelector('.btn-mark-read');
         if (btn && parseInt(btn.getAttribute('data-id')) === messageId) {
+          // Remove unread styling and buttons
           element.classList.remove('unread');
           
           if (btn) btn.remove();
@@ -952,6 +1125,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         }
       });
 
+      // Update unread count badge
       unreadMessagesCount = Math.max(0, unreadMessagesCount - 1);
       const countBadge = document.getElementById('unreadCount');
       if (countBadge) {
@@ -960,14 +1134,18 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
-
+    // Periodically check for new messages from family
     async function checkForNewMessages() {
       try {
-        const resp = await fetch('/family/messages');
+        const deviceId = storageManager.getDeviceId();
+        if (!deviceId) return;
+        
+        const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
         if (resp.ok) {
           const data = await resp.json();
           const newCount = data.total_unread || 0;
           
+          // Notify user if new messages arrived
           if (newCount > unreadMessagesCount) {
             const countBadge = document.getElementById('unreadCount');
             if (countBadge) {
@@ -987,20 +1165,24 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
-    // BOOT
-
-// Variables globales para el modal de conexión
+    // ============================================
+    // CONNECTION MODAL - Family member connection requests
+    // ============================================
+    // Global variable to track pending connection request
     let currentRequestId = null;
 
+    // Display modal requesting user approval for family member connection
     function showConnectionRequestModal(requestId, userInfo) {
         currentRequestId = requestId;
         
         const modal = document.getElementById('connectionRequestModal');
         const info = document.getElementById('connectionRequestInfo');
         
+        // Extract user information from request
         const userName = userInfo.user_full_name || userInfo.user_name;
         const username = userInfo.username || 'sin usuario';
         
+        // Populate modal with connection request details
         info.innerHTML = `
             <p><strong>👤 Usuario:</strong> ${userName}</p>
             <p><strong>📱 Telegram:</strong> @${username}</p>
@@ -1009,9 +1191,10 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             <p style="color: #666;">¿Deseas permitir que esta persona envíe mensajes a este dispositivo?</p>
         `;
         
+        // Show modal to user
         modal.style.display = 'flex';
         
-        // Reproducir sonido de notificación
+        // Notify user via voice
         if (speakEnabled && !isSpeaking) {
             speakTextSoft(`${userName} quiere conectarse. ¿Lo permites?`);
         }
@@ -1019,18 +1202,21 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         console.log(`🔔 Solicitud de conexión de ${userName} (@${username})`);
     }
 
+    // Hide connection request modal
     function hideConnectionRequestModal() {
         const modal = document.getElementById('connectionRequestModal');
         modal.style.display = 'none';
         currentRequestId = null;
     }
 
+    // Send connection approval or rejection response to server
     function sendConnectionResponse(approved) {
         if (!currentRequestId) {
             console.warn('⚠️ No hay solicitud pendiente');
             return;
         }
         
+        // Build response message
         const response = {
             type: "connection_response",
             request_id: currentRequestId,
@@ -1039,6 +1225,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         
         sendMessageToServer(JSON.stringify(response));
         
+        // Notify user of response
         const message = approved 
             ? "✅ Conexión aprobada correctamente" 
             : "❌ Conexión rechazada";
@@ -1052,15 +1239,20 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         hideConnectionRequestModal();
     }
 
-    // BOOT
-
+    // ============================================
+    // APPLICATION BOOT - Initialization and startup
+    // ============================================
+    // Main application initialization function
     async function boot() {
       try {
+        // Establish WebSocket connection to server
         connectWebSocket();
+        // Load available voices for text-to-speech
         await loadVoices();
+        // Ensure conversation UI element exists
         ensureConversation();
 
-        // Botón de ver recuerdos
+        // ---- Memory Button Setup ----
         const btn = document.getElementById(btnId);
         if (btn) {
           btn.addEventListener('click', (e) => {
@@ -1071,7 +1263,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           console.warn(`#${btnId} no encontrado en el DOM; añade el botón en index.html`);
         }
 
-        // Botón de mensajes familiares
+        // ---- Family Messages Button Setup ----
         const familyBtn = document.getElementById('showFamilyMessages');
         if (familyBtn) {
           familyBtn.addEventListener('click', (e) => {
@@ -1082,7 +1274,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           console.warn('#showFamilyMessages no encontrado en el DOM');
         }
 
-        // Botones del modal de conexión
+        // ---- Connection Modal Buttons Setup ----
         const approveBtn = document.getElementById('approveConnectionBtn');
         const rejectBtn = document.getElementById('rejectConnectionBtn');
         
@@ -1104,7 +1296,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           console.warn('#rejectConnectionBtn no encontrado en el DOM');
         }
 
-        // Cerrar modal si se hace clic fuera
+        // Close modal when clicking outside (defaults to rejection)
         const modal = document.getElementById('connectionRequestModal');
         if (modal) {
           modal.addEventListener('click', (e) => {
@@ -1115,43 +1307,66 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           });
         }
 
-        // Verificar nuevos mensajes periódicamente
+        // ---- Periodic Message Checking ----
+        // Check for new family messages every 2 minutes
         setInterval(checkForNewMessages, 120000);
 
-        // Inicializar detección de audio
+        // ---- Audio Detection Initialization ----
+        // Start monitoring microphone for user speech
         await initAudioDetection((rms) => {
           if (VERBOSE) console.log(`🎚️ RMS: ${rms.toFixed(4)} / Umbral: ${rmsThreshold}`);
         });
 
-        // Exponer API global
+        // ============================================
+        // GLOBAL API - Expose functions for debugging and external control
+        // ============================================
         window.__Acompania = {
+          // Audio detection control
           setThreshold: (v) => { rmsThreshold = v; console.log('Umbral RMS cambiado a', v); },
           getThreshold: () => rmsThreshold,
+          
+          // Storage management
           storageManager: storageManager,
           saveData: (data) => storageManager.saveData(data),
           loadData: () => storageManager.loadData(),
           clearData: () => storageManager.clearData(),
+          
+          // Voice synthesis control
           setVoiceParams: (p) => { Object.assign(voiceParams, p); console.log('voiceParams actualizados', voiceParams); },
           getVoiceParams: () => ({...voiceParams}),
+          
+          // Speech recognition control
           startRecognition: () => startRecognition(),
           stopRecognition: () => stopRecognition(),
+          
+          // WebSocket control
           reconnectWS: () => connectWebSocket(),
+          
+          // Message sending
           sendMessage: (t) => { appendConversation('Tú', t); sendMessageToServer(t); },
+          
+          // TTS control
           enableSpeech: (b) => { speakEnabled = !!b; console.log('TTS enabled =', speakEnabled); },
           getVoices: () => window.speechSynthesis.getVoices(),
+          
+          // Feature functions
           showMemoriesUI: () => showMyMemoriesUI(),
           loadFamilyMessages: () => loadFamilyMessages(),
           markMessageAsRead: (id) => markMessageAsRead(id),
-          // Nuevas funciones para debug
+          
+          // Connection modal debugging
           showConnectionModal: (userInfo) => showConnectionRequestModal('test_123', userInfo),
           approveConnection: () => sendConnectionResponse(true),
           rejectConnection: () => sendConnectionResponse(false),
+          
+          // Device information
           getDeviceInfo: () => ({
             device_id: storageManager.getDeviceId(),
             device_code: storageManager.getDeviceCode()
           })
         };
 
+        // Log startup information
         console.log('🚀 Compa inicializado correctamente (prioridad al usuario)');
         console.log('📱 Device ID:', storageManager.getDeviceId());
         console.log('🔢 Device Code:', storageManager.getDeviceCode());
@@ -1160,7 +1375,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       } catch (err) {
         console.error('Error arranque app:', err);
         
-        // Mostrar error en la UI
+        // Display error notification on screen
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
           position: fixed;
@@ -1182,7 +1397,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         `;
         document.body.appendChild(errorDiv);
         
-        // Auto-ocultar después de 10 segundos
+        // Auto-hide error notification after 10 seconds
         setTimeout(() => {
           errorDiv.style.opacity = '0';
           errorDiv.style.transition = 'opacity 1s';
@@ -1191,6 +1406,9 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
       }
     }
 
+    // ============================================
+    // STARTUP - Execute boot function when DOM ready
+    // ============================================
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', boot);
     } else {

@@ -1,3 +1,4 @@
+/* Universal styling: Reset default margins/padding and apply smooth transitions */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -6,6 +7,7 @@
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
+/* Page background: Cyan gradient with readable text color and minimum height */
 body {
   background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
   color: #1a1a1a;
@@ -13,6 +15,7 @@ body {
   min-height: 100vh;
 }
 
+/* Header styling: Semi-transparent blue bar with blur effect and centered title */
 header {
   background-color: rgba(74, 144, 226, 0.7);
   color: white;
@@ -24,22 +27,26 @@ header {
   -webkit-backdrop-filter: blur(5px);
 }
 
+/* Header title: Large text with text shadow for better readability */
 header h1 {
   margin: 0;
   font-size: 2rem;
   text-shadow: 0 1px 3px rgba(255, 255, 255, 0.5);
 }
 
+/* Main content area: Centered container with max-width and padding */
 main {
   padding: 2rem 1rem;
   max-width: 900px;
   margin: 0 auto;
 }
 
+/* Section spacing: Consistent bottom margin for conversation and controls sections */
 .conversation-section, .controls-section {
   margin-bottom: 2.5rem;
 }
 
+/* Conversation container: White background with scrollable area for messages */
 .conversation {
   background-color: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.5);
@@ -52,6 +59,7 @@ main {
   scrollbar-width: thin;
 }
 
+/* Individual message bubble: Rounded background with max-width for text wrapping */
 .message {
   margin-bottom: 1rem;
   padding: 0.7rem 1rem;
@@ -61,6 +69,7 @@ main {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+/* User message styling: Green gradient, right-aligned with subtle text shadow */
 .user-message {
   background: linear-gradient(135deg, #a7e090 0%, #76d7a3 100%);
   color: #1a1a1a;
@@ -69,6 +78,7 @@ main {
   text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
+/* Assistant message styling: Light blue background, left-aligned with border */
 .assistant-message {
   background-color: rgba(240, 248, 255, 0.95);
   border: 1px solid rgba(220, 235, 245, 0.7);
@@ -76,6 +86,7 @@ main {
   text-align: left;
 }
 
+/* Controls section layout: Flexbox with wrap for responsive grid of control panels */
 .controls-section {
   display: flex;
   flex-wrap: wrap;
@@ -83,6 +94,7 @@ main {
   margin-top: 2rem;
 }
 
+/* Memory and family control panels: Responsive containers with white background and shadow */
 .memory-controls, .family-controls {
   flex: 1 1 350px;
   background-color: rgba(255, 255, 255, 0.9);
@@ -92,12 +104,14 @@ main {
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
 
+/* Section headings: Blue color with text shadow for visual emphasis */
 .memory-controls h3, .family-controls h3 {
   margin-bottom: 1.2rem;
   color: #2b78e4;
   text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
 }
 
+/* List containers: Scrollable area with custom styling for memory and family items */
 .memory-list, .family-list {
   margin-top: 1rem;
   background-color: transparent;
@@ -108,20 +122,24 @@ main {
   overflow-y: auto;
 }
 
+/* Individual list items: Padding with subtle bottom border for separation */
 .memory-item, .family-item {
   padding: 0.8rem 1rem;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   transition: background-color 0.2s ease;
 }
 
+/* Hover effect for list items: Light blue background highlight on mouse over */
 .memory-item:hover, .family-item:hover {
   background-color: rgba(74, 144, 226, 0.1);
 }
 
+/* Remove border from last list item for clean appearance */
 .memory-item:last-child, .family-item:last-child {
   border-bottom: none;
 }
 
+/* Button styling: Blue gradient with shadow and 3D effect on bottom border */
 button {
   background: linear-gradient(180deg, #6aa9ed 0%, #4a90e2 100%);
   color: white;
@@ -137,17 +155,20 @@ button {
   transition: all 0.2s ease-in-out;
 }
 
+/* Button hover state: Darker gradient and slight elevation with shadow */
 button:hover {
   background: linear-gradient(180deg, #4a90e2 0%, #357ab8 100%);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
 }
 
+/* Button active state: Pressed effect with reduced border and downward movement */
 button:active {
   border-bottom: 1px solid #357ab8;
   transform: translateY(2px);
 }
 
+/* Disabled button state: Gray color with no interactions or transforms */
 button:disabled {
   background: #c0c0c0;
   border-bottom: 3px solid #a0a0a0;
@@ -156,6 +177,7 @@ button:disabled {
   transform: none;
 }
 
+/* Badge element: Red circular indicator with shadow for notification display */
 .badge {
   display: inline-block;
   background-color: #ff6b6b;
@@ -168,6 +190,7 @@ button:disabled {
   box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
 }
 
+/* Family item: Card-style container with left border using gradient and subtle shadow */
 .family-item {
   background-color: rgba(255, 255, 255, 0.7);
   padding: 1rem;
@@ -178,15 +201,18 @@ button:disabled {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
+/* Family item hover: Enhanced visibility with blue background tint */
 .family-item:hover {
   background-color: rgba(74, 144, 226, 0.1);
 }
 
+/* Unread family item: Orange gradient background and border to differentiate from read items */
 .family-item.unread {
   background: linear-gradient(135deg, rgba(255, 250, 240, 0.9) 0%, rgba(255, 245, 230, 0.9) 100%);
   border-image: linear-gradient(to bottom, #ffc977, #ff9f43) 1;
 }
 
+/* Family item header: Flex layout for sender name and date alignment */
 .family-item-header {
   display: flex;
   justify-content: space-between;
@@ -194,22 +220,26 @@ button:disabled {
   margin-bottom: 0.5rem;
 }
 
+/* Sender name: Bold blue text with subtle text shadow */
 .family-item-sender {
   font-weight: bold;
   color: #2b78e4;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
+/* Date display: Smaller gray text for timestamp information */
 .family-item-date {
   font-size: 0.8rem;
   color: #666;
 }
 
+/* Message content: Dark gray text with increased line height for readability */
 .family-item-message {
   color: #333;
   line-height: 1.4;
 }
 
+/* Status indicator: Red text with bold font to highlight message status (unread, pending, etc.) */
 .family-item-status {
   margin-top: 0.5rem;
   font-size: 0.85rem;
@@ -217,6 +247,7 @@ button:disabled {
   font-weight: bold;
 }
 
+/* Action buttons container: Flex layout for horizontal button arrangement */
 .family-item-actions {
   display: flex;
   gap: 8px;
@@ -224,6 +255,7 @@ button:disabled {
   margin-top: 10px;
 }
 
+/* Read/mark-read buttons: Small gray buttons with subtle shadow for item actions */
 .btn-read, .btn-mark-read {
   padding: 5px 10px;
   border-radius: 5px;
@@ -236,11 +268,13 @@ button:disabled {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+/* Read/mark-read button hover: Cyan gradient background for visual feedback */
 .btn-read:hover, .btn-mark-read:hover {
   background: linear-gradient(180deg, #e0f7fa 0%, #b2ebf2 100%);
   border-color: #a3d7e7;
 }
 
+/* Unread indicator dot: Red radial gradient circle with glow effect for notifications */
 .unread-dot {
   width: 12px;
   height: 12px;
@@ -252,6 +286,7 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
+/* Footer: Light gray text centered at bottom of page with subtle top border */
 footer {
   text-align: center;
   padding: 1.5rem 1rem;
@@ -261,6 +296,7 @@ footer {
   margin-top: 30px;
 }
 
+/* Device connection panel: Purple gradient background for device status display */
 .device-panel {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -271,6 +307,7 @@ footer {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Connected device state: Green border to indicate active connection */
 .device-connected {
     background: rgba(255, 255, 255, 0.2);
     padding: 10px;
@@ -278,6 +315,7 @@ footer {
     border: 2px solid #4CAF50;
 }
 
+/* Waiting device state: Orange border to indicate pending/connecting status */
 .device-waiting {
     background: rgba(255, 255, 255, 0.2);
     padding: 10px;
@@ -285,6 +323,7 @@ footer {
     border: 2px solid #FF9800;
 }
 
+/* Device info code block: Dark semi-transparent background for code display */
 .device-info code {
     background: rgba(0, 0, 0, 0.3);
     padding: 2px 6px;
@@ -292,6 +331,7 @@ footer {
     font-family: monospace;
 }
 
+/* Modal overlay: Full-screen semi-transparent dark background with centered content */
 .modal {
     position: fixed;
     top: 0;
@@ -306,11 +346,13 @@ footer {
     animation: fadeIn 0.3s;
 }
 
+/* Modal fade-in animation: Smooth opacity transition from transparent to visible */
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
 
+/* Modal content box: White centered dialog with shadow and animation */
 .modal-content {
     background: white;
     padding: 30px;
@@ -321,17 +363,20 @@ footer {
     animation: slideUp 0.3s;
 }
 
+/* Modal slide-up animation: Content enters from below with fade-in effect */
 @keyframes slideUp {
     from { transform: translateY(50px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
 }
 
+/* Modal heading: Blue title text at top of dialog box */
 .modal-content h2 {
     margin-top: 0;
     color: #2196F3;
     font-size: 24px;
 }
 
+/* Connection request info: Gray background container with formatted text for user details */
 #connectionRequestInfo {
     margin: 20px 0;
     padding: 20px;
@@ -341,12 +386,14 @@ footer {
     line-height: 1.6;
 }
 
+/* Modal action buttons: Flex layout for side-by-side approve/reject button arrangement */
 .modal-actions {
     display: flex;
     gap: 15px;
     margin-top: 25px;
 }
 
+/* Approve and reject buttons: Full-width buttons with responsive sizing */
 .btn-approve, .btn-reject {
     flex: 1;
     padding: 15px;
@@ -358,21 +405,25 @@ footer {
     transition: all 0.3s;
 }
 
+/* Approve button: Green background for positive action (accept connection) */
 .btn-approve {
     background: #4CAF50;
     color: white;
 }
 
+/* Approve button hover: Darker green with scale-up transform for interactive feedback */
 .btn-approve:hover {
     background: #45a049;
     transform: scale(1.05);
 }
 
+/* Reject button: Red background for negative action (deny connection) */
 .btn-reject {
     background: #f44336;
     color: white;
 }
 
+/* Reject button hover: Darker red with scale-up transform for interactive feedback */
 .btn-reject:hover {
     background: #da190b;
     transform: scale(1.05);
