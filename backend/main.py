@@ -629,7 +629,12 @@ async def send_data_update_to_client(websocket, memory_data, conversation_data):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     # Accept incoming WebSocket connection
-    await websocket.accept()
+    try:
+        await asyncio.wait_for(websocket.accept(), timeout=10.0)
+    except asyncio.TimeoutError:
+        print("❌ Timeout aceptando conexión WebSocket")
+        return
+    
     print("✅ Nueva conexión WebSocket establecida")
     
     # Load previously saved device connections from file
@@ -1207,6 +1212,8 @@ async def verify_memory_usage(device_id: str):
 @app.get("/family/messages")
 async def get_family_messages(device_id: str = Query(...)):
     """Obtiene mensajes no leídos de familiares PARA UN DISPOSITIVO ESPECÍFICO"""
+    print(f"🔍 SOLICITUD /family/messages - Device: {device_id}")
+    
     if not telegram_bot:
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     

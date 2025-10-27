@@ -863,13 +863,17 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     // FAMILY MESSAGES - Family communication feature
     // ============================================
     // Fetch and display family messages from server
+    
     async function loadFamilyMessages() {
       const deviceId = storageManager.getDeviceId();
+      console.log('🔍 loadFamilyMessages - Device ID:', deviceId);
+      
       if (!deviceId) {
-        console.error('❌ No device_id available');
+        console.error('❌ No device_id available for loadFamilyMessages');
+        appendConversation('Compa', 'No se pudo identificar tu dispositivo. Intenta recargar la página.');
         return;
       }
-      const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
+      
       const btn = document.getElementById('showFamilyMessages');
       const list = document.getElementById('familyMessagesList');
       const countBadge = document.getElementById('unreadCount');
@@ -880,9 +884,9 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           btn.disabled = true;
           btn.innerHTML = 'Cargando mensajes... <span id="unreadCount" class="badge"></span>';
         }
-
-        // Fetch all family messages
-        const resp = await fetch('/family/messages');
+        console.log('📨 Enviando solicitud a /family/messages con device_id:', deviceId);
+        const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
+        
         if (!resp.ok) {
           if (resp.status === 503) {
             appendConversation('Compa', 'El sistema de mensajes familiares no está configurado todavía.');
@@ -1136,12 +1140,15 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
     // Periodically check for new messages from family
     async function checkForNewMessages() {
-      try {
-        const deviceId = storageManager.getDeviceId();
-        if (!deviceId) return;
-        
-        const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
-        if (resp.ok) {
+        try {
+          const deviceId = storageManager.getDeviceId();
+          if (!deviceId) {
+            console.log('⏭️ checkForNewMessages: No device_id, saltando...');
+            return;
+          }
+          
+          const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
+            if (resp.ok) {
           const data = await resp.json();
           const newCount = data.total_unread || 0;
           
@@ -1245,14 +1252,21 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     // Main application initialization function
     async function boot() {
       try {
-        // Establish WebSocket connection to server
+        const deviceId = storageManager.getDeviceId();
+        console.log('🚀 Initializing application - Device ID:', deviceId);
+
+        if (!deviceId) {
+          console.error('❌ CRITICAL: Could not obtain device_id');
+        }
+
+        // Establish WebSocket connection to the server
         connectWebSocket();
         // Load available voices for text-to-speech
         await loadVoices();
-        // Ensure conversation UI element exists
+        // Ensure the conversation element exists in the UI
         ensureConversation();
 
-        // ---- Memory Button Setup ----
+        // ---- Memories Button Setup ----
         const btn = document.getElementById(btnId);
         if (btn) {
           btn.addEventListener('click', (e) => {
@@ -1260,7 +1274,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             showMyMemoriesUI();
           });
         } else {
-          console.warn(`#${btnId} no encontrado en el DOM; añade el botón en index.html`);
+          console.warn(`#${btnId} not found in DOM; add the button in index.html`);
         }
 
         // ---- Family Messages Button Setup ----
@@ -1271,50 +1285,50 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             loadFamilyMessages();
           });
         } else {
-          console.warn('#showFamilyMessages no encontrado en el DOM');
+          console.warn('#showFamilyMessages not found in DOM');
         }
 
         // ---- Connection Modal Buttons Setup ----
         const approveBtn = document.getElementById('approveConnectionBtn');
         const rejectBtn = document.getElementById('rejectConnectionBtn');
-        
+
         if (approveBtn) {
           approveBtn.addEventListener('click', () => {
-            console.log('🟢 Usuario aprobó la conexión');
+            console.log('🟢 User approved the connection');
             sendConnectionResponse(true);
           });
         } else {
-          console.warn('#approveConnectionBtn no encontrado en el DOM');
+          console.warn('#approveConnectionBtn not found in DOM');
         }
-        
+
         if (rejectBtn) {
           rejectBtn.addEventListener('click', () => {
-            console.log('🔴 Usuario rechazó la conexión');
+            console.log('🔴 User rejected the connection');
             sendConnectionResponse(false);
           });
         } else {
-          console.warn('#rejectConnectionBtn no encontrado en el DOM');
+          console.warn('#rejectConnectionBtn not found in DOM');
         }
 
-        // Close modal when clicking outside (defaults to rejection)
+        // Close modal when clicking outside (defaults to reject)
         const modal = document.getElementById('connectionRequestModal');
         if (modal) {
           modal.addEventListener('click', (e) => {
             if (e.target === modal) {
-              console.log('⚠️ Modal cerrado sin responder - asumiendo rechazo');
+              console.log('⚠️ Modal closed without responding - assuming reject');
               sendConnectionResponse(false);
             }
           });
         }
 
-        // ---- Periodic Message Checking ----
-        // Check for new family messages every 2 minutes
+        // ---- Periodic Message Check ----
+        // Check for new family messages every 2 minutes (120000ms)
         setInterval(checkForNewMessages, 120000);
 
         // ---- Audio Detection Initialization ----
-        // Start monitoring microphone for user speech
+        // Start monitoring the microphone for user speech
         await initAudioDetection((rms) => {
-          if (VERBOSE) console.log(`🎚️ RMS: ${rms.toFixed(4)} / Umbral: ${rmsThreshold}`);
+          if (VERBOSE) console.log(`🎚️ RMS: ${rms.toFixed(4)} / Threshold: ${rmsThreshold}`);
         });
 
         // ============================================
@@ -1322,43 +1336,43 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         // ============================================
         window.__Acompania = {
           // Audio detection control
-          setThreshold: (v) => { rmsThreshold = v; console.log('Umbral RMS cambiado a', v); },
+          setThreshold: (v) => { rmsThreshold = v; console.log('RMS threshold changed to', v); },
           getThreshold: () => rmsThreshold,
-          
+
           // Storage management
           storageManager: storageManager,
           saveData: (data) => storageManager.saveData(data),
           loadData: () => storageManager.loadData(),
           clearData: () => storageManager.clearData(),
-          
+
           // Voice synthesis control
-          setVoiceParams: (p) => { Object.assign(voiceParams, p); console.log('voiceParams actualizados', voiceParams); },
-          getVoiceParams: () => ({...voiceParams}),
-          
+          setVoiceParams: (p) => { Object.assign(voiceParams, p); console.log('voiceParams updated', voiceParams); },
+          getVoiceParams: () => ({ ...voiceParams }),
+
           // Speech recognition control
           startRecognition: () => startRecognition(),
           stopRecognition: () => stopRecognition(),
-          
+
           // WebSocket control
           reconnectWS: () => connectWebSocket(),
-          
+
           // Message sending
-          sendMessage: (t) => { appendConversation('Tú', t); sendMessageToServer(t); },
-          
+          sendMessage: (t) => { appendConversation('You', t); sendMessageToServer(t); },
+
           // TTS control
           enableSpeech: (b) => { speakEnabled = !!b; console.log('TTS enabled =', speakEnabled); },
           getVoices: () => window.speechSynthesis.getVoices(),
-          
+
           // Feature functions
           showMemoriesUI: () => showMyMemoriesUI(),
           loadFamilyMessages: () => loadFamilyMessages(),
           markMessageAsRead: (id) => markMessageAsRead(id),
-          
+
           // Connection modal debugging
           showConnectionModal: (userInfo) => showConnectionRequestModal('test_123', userInfo),
           approveConnection: () => sendConnectionResponse(true),
           rejectConnection: () => sendConnectionResponse(false),
-          
+
           // Device information
           getDeviceInfo: () => ({
             device_id: storageManager.getDeviceId(),
@@ -1366,16 +1380,16 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           })
         };
 
-        // Log startup information
-        console.log('🚀 Compa inicializado correctamente (prioridad al usuario)');
+        // Startup information
+        console.log('🚀 Compa initialized successfully (user priority)');
         console.log('📱 Device ID:', storageManager.getDeviceId());
         console.log('🔢 Device Code:', storageManager.getDeviceCode());
-        console.log('💡 Usa window.__Acompania para acceder a funciones de debug');
-        
+        console.log('💡 Use window.__Acompania to access debug functions');
+
       } catch (err) {
-        console.error('Error arranque app:', err);
-        
-        // Display error notification on screen
+        console.error('App startup error:', err);
+
+        // Show on-screen error notification
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
           position: fixed;
@@ -1391,13 +1405,13 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           font-size: 16px;
         `;
         errorDiv.innerHTML = `
-          <strong>⚠️ Error de inicialización</strong><br>
-          <small>${err.message || 'Error desconocido'}</small><br>
-          <small style="opacity:0.8;">Intenta recargar la página</small>
+          <strong>⚠️ Initialization Error</strong><br>
+          <small>${err.message || 'Unknown error'}</small><br>
+          <small style="opacity:0.8;">Try reloading the page</small>
         `;
         document.body.appendChild(errorDiv);
-        
-        // Auto-hide error notification after 10 seconds
+
+        // Auto-hide the error notification after 10 seconds
         setTimeout(() => {
           errorDiv.style.opacity = '0';
           errorDiv.style.transition = 'opacity 1s';
@@ -1405,15 +1419,13 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         }, 10000);
       }
     }
-
     // ============================================
-    // STARTUP - Execute boot function when DOM ready
+    // STARTUP - Execute boot function when the DOM is ready
     // ============================================
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', boot);
     } else {
       boot();
     }
-
-  })();
-}
+  })(); 
+} 

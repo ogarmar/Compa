@@ -553,91 +553,131 @@ El mensaje llegará directamente al dispositivo conectado."""
                 "❌ Error al enviar el mensaje. Inténtalo de nuevo."
             )
 
-    async def start_bot(self):
+    async def start_bot(self):  # ✅ CORRECTO: FUERA de handle_message
         """Initialize and start the Telegram bot with all command and message handlers"""
         if not self.token:
             print("❌ Token de Telegram no configurado")
             return        
         
-        try:
-            # Create bot application with provided token
-            self.application = Application.builder().token(self.token).build()
-            
-            # Register command handlers for all bot commands
-            self.application.add_handler(CommandHandler("start", self.start_command))
-            self.application.add_handler(CommandHandler("ayuda", self.help_command))
-            self.application.add_handler(CommandHandler("mismensajes", self.my_messages_command))
-            self.application.add_handler(CommandHandler("connect", self.handle_connect_command))
-            self.application.add_handler(CommandHandler("disconnect", self.handle_disconnect_command))
-            self.application.add_handler(CommandHandler("status", self.handle_status_command))
-            # Register handler for all non-command text messages
-            self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-            
-            # Initialize and start the bot application
-            await self.application.initialize()
-            await self.application.start()
-
+        max_retries = 3
+        retry_delay = 5
+        
+        for attempt in range(max_retries):
             try:
-                # Start polling for incoming messages (preferred method)
-                self._polling_task = asyncio.create_task(self.application.updater.start_polling())
+                print(f"🔄 Intentando iniciar bot de Telegram (intento {attempt + 1}/{max_retries})")
+                
+                # Create bot application with provided token
+                self.application = Application.builder().token(self.token).build()
+                
+                # Register command handlers for all bot commands
+                self.application.add_handler(CommandHandler("start", self.start_command))
+                self.application.add_handler(CommandHandler("ayuda", self.help_command))
+                self.application.add_handler(CommandHandler("mismensajes", self.my_messages_command))
+                self.application.add_handler(CommandHandler("connect", self.handle_connect_command))
+                self.application.add_handler(CommandHandler("disconnect", self.handle_disconnect_command))
+                self.application.add_handler(CommandHandler("status", self.handle_status_command))
+                # Register handler for all non-command text messages
+                self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+                
+                # Initialize and start the bot application
+                await self.application.initialize()
+                await self.application.start()
+
+                try:
+                    # Start polling for incoming messages with connection timeout
+                    self._polling_task = asyncio.create_task(self.application.updater.start_polling())
+                except Exception as e:
+                    print("⚠️ start_polling() falló, intentando fallback run_polling():", e)
+                    # Fallback to alternative polling method if start_polling fails
+                    self._polling_task = asyncio.create_task(self.application.run_polling(
+                        close_loop=False, 
+                        stop_signals=None,
+                        poll_interval=2.0,
+                        timeout=10
+                    ))
+
+                users = await self.load_authorized_users()
+                print("✅ Bot de Telegram iniciado correctamente")
+                print(f"🔗 Sistema de conexión por código activado")
+                if users:
+                    print(f"🔐 {len(users)} usuarios autorizados históricamente")
+                else:
+                    print("🔐 Sin usuarios autorizados históricamente")
+                
+                break
+
             except Exception as e:
-                print("⚠️ start_polling() falló, intentando fallback run_polling():", e)
-                # Fallback to alternative polling method if start_polling fails
-                self._polling_task = asyncio.create_task(self.application.run_polling(close_loop=False, stop_signals=None))
+                print(f"❌ Error iniciando bot de Telegram (intento {attempt + 1}): {e}")
+                
+                try:
+                    if self.application:
+                        await self.application.stop()
+                        await self.application.shutdown()
+                        self.application = None
+                except Exception as e2:
+                    print("⚠️ Error limpiando aplicación:", e2)
+                
+                if attempt < max_retries - 1:
+                    print(f"⏳ Reintentando en {retry_delay} segundos...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    print("❌ Todos los intentos fallaron. Bot de Telegram no iniciado.")
+                    print("ℹ️ La aplicación continuará sin funcionalidad de Telegram")
 
-            # Display startup information
-            users = await self.load_authorized_users()
-            print("✅ Bot de Telegram iniciado correctamente")
-            print(f"🔗 Sistema de conexión por código activado")
-            if users:
-                print(f"🔐 {len(users)} usuarios autorizados históricamente")
-            else:
-                print("🔐 Sin usuarios autorizados históricamente")
-
-        except Exception as e:
-            print(f"❌ Error iniciando bot de Telegram: {e}")
-            try:
-                # Attempt cleanup if initialization fails
-                if self.application:
-                    await self.application.stop()
-                    await self.application.shutdown()
-            except Exception as e2:
-                print("⚠️ Error intentando limpiar la aplicación tras fallo:", e2)
-
-    async def stop_bot(self):
-        """Gracefully stop the bot and clean up resources without closing global event loop"""
+    async def stop_bot(self):  # ✅ CORRECTO: FUERA de handle_message
+        """Gracefully stop the bot and clean up resources"""
+        print("🛑 Iniciando parada del bot de Telegram...")
+        
         try:
-            # Stop polling task if it exists
+            # 1. First stop the updater/polling
             if hasattr(self, "_polling_task") and self._polling_task:
                 try:
-                    # Stop the updater from polling Telegram servers
-                    if self.application and getattr(self.application, "updater", None):
+                    print("⏹️ Deteniendo polling...")
+                    # Stop the updater properly
+                    if self.application and hasattr(self.application, 'updater') and self.application.updater:
                         try:
-                            await self.application.updater.stop_polling()
-                        except Exception:
-                            pass
-
-                    # Cancel the polling task if it's still running
+                            self.application.updater.running = False
+                            if hasattr(self.application.updater, 'stop_polling'):
+                                await self.application.updater.stop_polling()
+                            elif hasattr(self.application.updater, 'stop'):
+                                await self.application.updater.stop()
+                        except Exception as e:
+                            print("⚠️ Error deteniendo updater:", e)
+                    
+                    # Cancel the polling task
                     if not self._polling_task.done():
                         self._polling_task.cancel()
                         try:
-                            await self._polling_task
-                        except asyncio.CancelledError:
+                            await asyncio.wait_for(self._polling_task, timeout=5.0)
+                        except (asyncio.CancelledError, asyncio.TimeoutError):
                             pass
                 except Exception as e:
-                    print("⚠️ Error deteniendo tarea de polling:", e)
-
-            # Shutdown the application gracefully
+                    print("⚠️ Error en proceso de detención de polling:", e)
+            
+            # 2. Stop the application
             if self.application:
                 try:
+                    print("⏹️ Deteniendo aplicación...")
                     await self.application.stop()
                 except Exception as e:
                     print("⚠️ Error en application.stop():", e)
+                
                 try:
+                    print("⏹️ Cerrando aplicación...")
                     await self.application.shutdown()
                 except Exception as e:
                     print("⚠️ Error en application.shutdown():", e)
-
-            print("Bot de Telegram detenido")
+            
+            # 3. Additional cleanup
+            if hasattr(self, "_polling_task") and self._polling_task:
+                try:
+                    if not self._polling_task.done():
+                        self._polling_task.cancel()
+                except:
+                    pass
+            
+            print("✅ Bot de Telegram detenido correctamente")
+            
         except Exception as e:
-            print("Error en stop_bot:", e)
+            print("❌ Error crítico en stop_bot:", e)
