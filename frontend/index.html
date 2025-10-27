@@ -14,6 +14,11 @@
         </header>
 
         <main>
+            <div class="device-panel">
+    <div id="deviceInfo" class="device-info">
+        Cargando información del dispositivo...
+    </div>
+</div>
             <div class="assistant-container">
                 <div class="voice-section">
                     <button id="micButton" class="mic-button">
@@ -57,5 +62,15 @@
     </div>
 
     <script src="/static/app.js?v=3.0"></script>
+    <div id="connectionRequestModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h2>🔔 Solicitud de Conexión</h2>
+        <div id="connectionRequestInfo"></div>
+        <div class="modal-actions">
+            <button id="approveConnectionBtn" class="btn-approve">✅ Aprobar</button>
+            <button id="rejectConnectionBtn" class="btn-reject">❌ Rechazar</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

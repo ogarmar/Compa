@@ -14,51 +14,130 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
     // Local Storage Manager
     class LocalStorageManager {
-        constructor() {
-            this.storageKey = 'alzheimer_app_data';
-        }
+      constructor() {
+          this.storageKey = 'alzheimer_app_data';
+      }
 
-        saveData(data) {
-            try {
-                const dataToSave = {
-                    user_memory: data.user_memory || {},
-                    conversation_history: data.conversation_history || [],
-                    last_updated: new Date().toISOString()
-                };
-                
-                localStorage.setItem(this.storageKey, JSON.stringify(dataToSave));
-                console.log('✅ Datos guardados localmente');
-                return true;
-            } catch (error) {
-                console.error('Error guardando datos:', error);
-                return false;
-            }
-        }
+      generateDeviceCode() {
+          // Genera código de 6 dígitos único
+          let code;
+          do {
+              code = Math.floor(100000 + Math.random() * 900000).toString();
+          } while (code.length !== 6);
+          return code;
+      }
 
-        loadData() {
-            try {
-                const saved = localStorage.getItem(this.storageKey);
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    console.log('📂 Datos locales cargados');
-                    return data;
-                }
-                return null;
-            } catch (error) {
-                console.error('Error cargando datos:', error);
-                return null;
-            }
-        }
+      generateUniqueDeviceId() {
+          // Formato: device_XXXXXX (6 dígitos únicos)
+          const code = this.generateDeviceCode();
+          return `device_${code}`;
+      }
 
-        clearData() {
-            try {
-                localStorage.removeItem(this.storageKey);
-                console.log('🗑️ Datos locales eliminados');
-            } catch (error) {
-                console.error('Error eliminando datos:', error);
-            }
-        }
-    }
+      saveData(data) {
+          try {
+              const currentData = this.loadData() || {};
+              
+              // IMPORTANTE: Preservar device_id y device_code originales
+              const dataToSave = {
+                  device_id: data.device_id || currentData.device_id || this.generateUniqueDeviceId(),
+                  device_code: data.device_code || currentData.device_code || this.generateDeviceCode(),
+                  user_memory: data.user_memory || currentData.user_memory || {},
+                  conversation_history: data.conversation_history || currentData.conversation_history || [],
+                  last_updated: new Date().toISOString(),
+                  created_at: currentData.created_at || new Date().toISOString()
+              };
+              
+              localStorage.setItem(this.storageKey, JSON.stringify(dataToSave));
+              console.log(`✅ Datos guardados - Device: ${dataToSave.device_id} - Código: ${dataToSave.device_code}`);
+              return dataToSave;
+          } catch (error) {
+              console.error('Error guardando datos:', error);
+              return null;
+          }
+      }
+
+      loadData() {
+          try {
+              const saved = localStorage.getItem(this.storageKey);
+              if (saved) {
+                  const data = JSON.parse(saved);
+                  
+                  // Validar que tenga los campos necesarios
+                  if (!data.device_id || !data.device_code) {
+                      console.warn('⚠️ Datos corruptos, regenerando...');
+                      const newData = this.createInitialData();
+                      this.saveData(newData);
+                      return newData;
+                  }
+                  
+                  console.log(`📂 Datos locales cargados - Device: ${data.device_id} - Código: ${data.device_code}`);
+                  return data;
+              } else {
+                  // Primera vez: crear datos iniciales
+                  const initialData = this.createInitialData();
+                  this.saveData(initialData);
+                  return initialData;
+              }
+          } catch (error) {
+              console.error('Error cargando datos:', error);
+              const initialData = this.createInitialData();
+              this.saveData(initialData);
+              return initialData;
+          }
+      }
+
+      createInitialData() {
+          const device_id = this.generateUniqueDeviceId();
+          const device_code = device_id.split('_')[1]; // Extraer los 6 dígitos del device_id
+          
+          return {
+              device_id: device_id,
+              device_code: device_code,
+              user_memory: {
+                  user_preferences: {},
+                  important_memories: [],
+                  family_members: [],
+                  daily_routine: {},
+                  emotional_state: "calm"
+              },
+              conversation_history: [],
+              created_at: new Date().toISOString()
+          };
+      }
+
+      getDeviceId() {
+          const data = this.loadData();
+          return data ? data.device_id : null;
+      }
+
+      getDeviceCode() {
+          const data = this.loadData();
+          return data ? data.device_code : null;
+      }
+
+      clearData() {
+          try {
+              localStorage.removeItem(this.storageKey);
+              console.log('🗑️ Datos locales eliminados');
+          } catch (error) {
+              console.error('Error eliminando datos:', error);
+          }
+      }
+
+      // Método para regenerar código (solo en caso de conflicto)
+      regenerateCode() {
+          const data = this.loadData();
+          const newCode = this.generateDeviceCode();
+          const newDeviceId = `device_${newCode}`;
+          
+          data.device_id = newDeviceId;
+          data.device_code = newCode;
+          
+          this.saveData(data);
+          console.log(`🔄 Nuevo código generado: ${newCode}`);
+          return data;
+      }
+  }
 
     const storageManager = new LocalStorageManager();
 
@@ -117,44 +196,58 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     // WebSocket
 
     function connectWebSocket() {
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-      
-      
-      const localData = storageManager.loadData();
-      
-      ws = new WebSocket(WS_URL);
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+    
+    const localData = storageManager.loadData();
+    
+    ws = new WebSocket(WS_URL);
 
-      ws.addEventListener('open', () => {
+    ws.addEventListener('open', () => {
         console.log('✅ WebSocket abierto', WS_URL);
         
-        
         const initialData = {
-          type: "initial_data",
-          data: localData
+            type: "initial_data",
+            data: localData
         };
         ws.send(JSON.stringify(initialData));
         console.log('📤 Datos iniciales enviados al servidor');
-        if (keepaliveInterval) clearInterval(keepaliveInterval);
-        keepaliveInterval = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'keepalive', ts: Date.now() }));
-            if (VERBOSE) console.log('→ keepalive enviado');
-          }
-        }, KEEPALIVE_MS);
-      });
+    });
 
-      ws.addEventListener('message', (ev) => {
+    ws.addEventListener('message', (ev) => {
         try {
-          const parsed = JSON.parse(ev.data);
-          
-          if (parsed && parsed.type === 'data_update') {
-            console.log('📥 Recibida actualización de datos del servidor');
-            storageManager.saveData({
-              user_memory: parsed.user_memory,
-              conversation_history: parsed.conversation_history
-            });
-            return;  
+            const parsed = JSON.parse(ev.data);
+            if (parsed && parsed.type === 'connection_request') {
+            showConnectionRequestModal(parsed.request_id, parsed.user_info);
+            return;
+        }
+        
+          // ⬇️ NUEVO: Manejar aprobación confirmada
+          if (parsed && parsed.type === 'connection_approved') {
+              appendConversation('Sistema', `✅ ${parsed.user_name} se ha conectado correctamente`);
+              updateDeviceInfo(storageManager.getDeviceCode(), parsed.chat_id);
+              return;
           }
+            if (parsed && parsed.type === 'device_info') {
+                console.log('📱 Información del dispositivo recibida:', parsed);
+                    const updatedData = {
+                    ...localData,
+                    device_id: parsed.device_id,
+                    device_code: parsed.device_code
+                };
+                storageManager.saveData(updatedData);
+                
+                updateDeviceInfo(parsed.device_code, parsed.connected_chat);
+                return;
+            }
+            
+            if (parsed && parsed.type === 'data_update') {
+                console.log('📥 Recibida actualización de datos del servidor');
+                storageManager.saveData({
+                    user_memory: parsed.user_memory,
+                    conversation_history: parsed.conversation_history
+                });
+                return;
+            }
           
           
           if (parsed && parsed.type === 'message' && parsed.text) {
@@ -204,6 +297,44 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         console.log('Usuario hablando — no reproducir TTS ahora.');
       }
     }
+
+    function updateDeviceInfo(deviceCode, connectedChat) {
+      const deviceInfoElement = document.getElementById('deviceInfo');
+      if (!deviceInfoElement) return;
+      
+      // Guardar el código en localStorage por si acaso
+      const localData = storageManager.loadData();
+      if (localData.device_code !== deviceCode) {
+          localData.device_code = deviceCode;
+          storageManager.saveData(localData);
+      }
+      
+      if (connectedChat) {
+          deviceInfoElement.innerHTML = `
+              <div class="device-connected">
+                  <strong>📱 Tu Código Personal: <span style="font-size:24px; color:#4CAF50;">${deviceCode}</span></strong>
+                  <br>
+                  <small>✅ Conectado a Telegram</small>
+                  <br>
+                  <small>Este es tu código único permanente</small>
+              </div>
+          `;
+      } else {
+          deviceInfoElement.innerHTML = `
+              <div class="device-waiting">
+                  <strong>📱 Tu Código Personal: <span style="font-size:24px; color:#2196F3;">${deviceCode}</span></strong>
+                  <br>
+                  <small>⏳ Esperando conexión...</small>
+                  <br>
+                  <small>Dile a tu familiar que use en Telegram:</small>
+                  <br>
+                  <code style="font-size:16px; background:#f0f0f0; padding:5px;">/connect ${deviceCode}</code>
+                  <br>
+                  <small style="color:#666;">💡 Este código se mantendrá siempre igual</small>
+              </div>
+          `;
+      }
+  }
 
     function sendMessageToServer(text) {
       try {
@@ -552,16 +683,26 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           btn.disabled = true;
           btn.textContent = 'Cargando recuerdos...';
         }
-        const resp = await fetch('/memory/cofre');
+        
+        const deviceId = storageManager.getDeviceId();
+        if (!deviceId) {
+          appendConversation('Compa', 'No he podido identificar tu dispositivo. Intenta recargar la página.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Ver mis recuerdos'; }
+          return;
+        }
+        
+        const resp = await fetch(`/memory/cofre?device_id=${encodeURIComponent(deviceId)}`);
         if (!resp.ok) throw new Error('Error fetching memories: ' + resp.status);
         const data = await resp.json();
         const memories = data.important_memories || [];
+        
         if (list) list.innerHTML = '';
         if (!memories.length) {
           appendConversation('Compa', 'No tienes recuerdos guardados todavía.');
           if (btn) { btn.disabled = false; btn.textContent = 'Ver mis recuerdos'; }
           return;
         }
+        
         const maxShow = 100;
         const toShow = memories.slice(0, maxShow);
         toShow.forEach((m, idx) => {
@@ -584,6 +725,8 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     // Family messages
 
     async function loadFamilyMessages() {
+      const deviceId = storageManager.getDeviceId();
+      const resp = await fetch(`/family/messages?device_id=${encodeURIComponent(deviceId)}`);
       const btn = document.getElementById('showFamilyMessages');
       const list = document.getElementById('familyMessagesList');
       const countBadge = document.getElementById('unreadCount');
@@ -846,12 +989,78 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 
     // BOOT
 
+// Variables globales para el modal de conexión
+    let currentRequestId = null;
+
+    function showConnectionRequestModal(requestId, userInfo) {
+        currentRequestId = requestId;
+        
+        const modal = document.getElementById('connectionRequestModal');
+        const info = document.getElementById('connectionRequestInfo');
+        
+        const userName = userInfo.user_full_name || userInfo.user_name;
+        const username = userInfo.username || 'sin usuario';
+        
+        info.innerHTML = `
+            <p><strong>👤 Usuario:</strong> ${userName}</p>
+            <p><strong>📱 Telegram:</strong> @${username}</p>
+            <p><strong>🆔 Chat ID:</strong> ${userInfo.chat_id}</p>
+            <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+            <p style="color: #666;">¿Deseas permitir que esta persona envíe mensajes a este dispositivo?</p>
+        `;
+        
+        modal.style.display = 'flex';
+        
+        // Reproducir sonido de notificación
+        if (speakEnabled && !isSpeaking) {
+            speakTextSoft(`${userName} quiere conectarse. ¿Lo permites?`);
+        }
+        
+        console.log(`🔔 Solicitud de conexión de ${userName} (@${username})`);
+    }
+
+    function hideConnectionRequestModal() {
+        const modal = document.getElementById('connectionRequestModal');
+        modal.style.display = 'none';
+        currentRequestId = null;
+    }
+
+    function sendConnectionResponse(approved) {
+        if (!currentRequestId) {
+            console.warn('⚠️ No hay solicitud pendiente');
+            return;
+        }
+        
+        const response = {
+            type: "connection_response",
+            request_id: currentRequestId,
+            approved: approved
+        };
+        
+        sendMessageToServer(JSON.stringify(response));
+        
+        const message = approved 
+            ? "✅ Conexión aprobada correctamente" 
+            : "❌ Conexión rechazada";
+        
+        appendConversation('Sistema', message);
+        if (speakEnabled && !isSpeaking) {
+            speakTextSoft(message);
+        }
+        
+        console.log(`${approved ? '✅' : '❌'} Respuesta enviada: ${approved ? 'APROBADA' : 'RECHAZADA'}`);
+        hideConnectionRequestModal();
+    }
+
+    // BOOT
+
     async function boot() {
       try {
         connectWebSocket();
         await loadVoices();
         ensureConversation();
 
+        // Botón de ver recuerdos
         const btn = document.getElementById(btnId);
         if (btn) {
           btn.addEventListener('click', (e) => {
@@ -862,6 +1071,7 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           console.warn(`#${btnId} no encontrado en el DOM; añade el botón en index.html`);
         }
 
+        // Botón de mensajes familiares
         const familyBtn = document.getElementById('showFamilyMessages');
         if (familyBtn) {
           familyBtn.addEventListener('click', (e) => {
@@ -872,12 +1082,48 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           console.warn('#showFamilyMessages no encontrado en el DOM');
         }
 
+        // Botones del modal de conexión
+        const approveBtn = document.getElementById('approveConnectionBtn');
+        const rejectBtn = document.getElementById('rejectConnectionBtn');
+        
+        if (approveBtn) {
+          approveBtn.addEventListener('click', () => {
+            console.log('🟢 Usuario aprobó la conexión');
+            sendConnectionResponse(true);
+          });
+        } else {
+          console.warn('#approveConnectionBtn no encontrado en el DOM');
+        }
+        
+        if (rejectBtn) {
+          rejectBtn.addEventListener('click', () => {
+            console.log('🔴 Usuario rechazó la conexión');
+            sendConnectionResponse(false);
+          });
+        } else {
+          console.warn('#rejectConnectionBtn no encontrado en el DOM');
+        }
+
+        // Cerrar modal si se hace clic fuera
+        const modal = document.getElementById('connectionRequestModal');
+        if (modal) {
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+              console.log('⚠️ Modal cerrado sin responder - asumiendo rechazo');
+              sendConnectionResponse(false);
+            }
+          });
+        }
+
+        // Verificar nuevos mensajes periódicamente
         setInterval(checkForNewMessages, 120000);
 
+        // Inicializar detección de audio
         await initAudioDetection((rms) => {
           if (VERBOSE) console.log(`🎚️ RMS: ${rms.toFixed(4)} / Umbral: ${rmsThreshold}`);
         });
 
+        // Exponer API global
         window.__Acompania = {
           setThreshold: (v) => { rmsThreshold = v; console.log('Umbral RMS cambiado a', v); },
           getThreshold: () => rmsThreshold,
@@ -895,12 +1141,53 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
           getVoices: () => window.speechSynthesis.getVoices(),
           showMemoriesUI: () => showMyMemoriesUI(),
           loadFamilyMessages: () => loadFamilyMessages(),
-          markMessageAsRead: (id) => markMessageAsRead(id)
+          markMessageAsRead: (id) => markMessageAsRead(id),
+          // Nuevas funciones para debug
+          showConnectionModal: (userInfo) => showConnectionRequestModal('test_123', userInfo),
+          approveConnection: () => sendConnectionResponse(true),
+          rejectConnection: () => sendConnectionResponse(false),
+          getDeviceInfo: () => ({
+            device_id: storageManager.getDeviceId(),
+            device_code: storageManager.getDeviceCode()
+          })
         };
 
         console.log('🚀 Compa inicializado correctamente (prioridad al usuario)');
+        console.log('📱 Device ID:', storageManager.getDeviceId());
+        console.log('🔢 Device Code:', storageManager.getDeviceCode());
+        console.log('💡 Usa window.__Acompania para acceder a funciones de debug');
+        
       } catch (err) {
         console.error('Error arranque app:', err);
+        
+        // Mostrar error en la UI
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #f44336;
+          color: white;
+          padding: 15px 30px;
+          border-radius: 10px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          z-index: 9999;
+          font-size: 16px;
+        `;
+        errorDiv.innerHTML = `
+          <strong>⚠️ Error de inicialización</strong><br>
+          <small>${err.message || 'Error desconocido'}</small><br>
+          <small style="opacity:0.8;">Intenta recargar la página</small>
+        `;
+        document.body.appendChild(errorDiv);
+        
+        // Auto-ocultar después de 10 segundos
+        setTimeout(() => {
+          errorDiv.style.opacity = '0';
+          errorDiv.style.transition = 'opacity 1s';
+          setTimeout(() => errorDiv.remove(), 1000);
+        }, 10000);
       }
     }
 

@@ -24,8 +24,15 @@ family_messages.json
 \backend\__pycache__\
 \backend\test_messages.py
 \backend\fix_old_messages.py
+\backend\device_connections.json
 
+device_connections.json
+user_memory_*.json
+conversation_*.json
 
+\backend\device_connections.json
+\backend\user_memory_*.json
+\backend\conversation_*.json
 *.tmp
 *.log
 

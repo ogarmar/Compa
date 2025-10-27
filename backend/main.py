@@ -1,3 +1,4 @@
+from random import random
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -15,6 +16,8 @@ import traceback
 import google.generativeai as genai
 import re
 from datetime import datetime
+import uuid
+from collections import defaultdict
 
 try:
     from .telegram_bot import FamilyMessagesBot
@@ -62,15 +65,6 @@ GEMINI_MODEL = "gemini-2.5-flash-lite"  # DO NOT CHANGE THIS MODEL
 # Constants for memory and conversation files
 MEMORY_FILE = "user_memory.json"
 CONVERSATION_FILE = "conversation_history.json"
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-telegram_bot = None
-
-if TELEGRAM_TOKEN:
-    telegram_bot = FamilyMessagesBot(TELEGRAM_TOKEN)
-else:
-    print("⚠️ TELEGRAM_BOT_TOKEN no configurado - funcionalidad de mensajes familiares deshabilitada")
-
 
 ALZHEIMER_PROMPT = """
 Eres "Compa", un compañero conversacional afectuoso que ofrece apoyo mediante escucha activa y conexión emocional.
@@ -122,7 +116,7 @@ GESTIÓN PRÁCTICA:
    "Tu [familiar] te mandó un mensaje muy cariñoso" - fundamental para bienestar emocional
 
 FORMATO RESPUESTAS:
-• 1-2 frases máximo • Natural y conversacional • Tono afectuoso siempre prioritario
+- 1-2 frases máximo • Natural y conversacional • Tono afectuoso siempre prioritario
 """
 
 FAMILY_MESSAGES_PROMPT = """
@@ -136,37 +130,34 @@ REGLAS ESTRICTAS MENSAJES:
 ⎔ Jamás menciones condiciones médicas
 
 EJEMPLOS CORRECTOS:
-• "Léeme los mensajes" → "Claro, voy a leerte los mensajes."
-• "¿Tengo mensajes?" → "Sí, tienes {count} mensajes."
+- "Léeme los mensajes" → "Claro, voy a leerte los mensajes."
+- "¿Tengo mensajes?" → "Sí, tienes {count} mensajes."
 
 Usuario: "{user_message}"
 
 Respuesta (1 frase, tono afectuoso):
 """
+
 def detect_message_intent(user_message):
     """Detección más inteligente de intenciones sobre mensajes"""
     lower_msg = user_message.lower()
     
-  
     immediate_read_keywords = [
         "léeme", "lee", "leer", "dime", "cuéntame", "escucha", 
         "ponme", "reproduce", "escuchar", "oír", "qué dice",
         "qué escribió", "contenido", "mensaje", "recibir", "lee el"
     ]
     
-   
     query_keywords = [
         "tengo", "hay", "mensajes", "familiares", "familiar",
         "alguno", "algún", "recibí", "llegó", "tienes"
     ]
-    
     
     old_messages_keywords = [
         "antiguos", "antiguo", "leídos", "pasados", "anteriores", 
         "historial", "todos", "todos los", "todos mis"
     ]
     
-
     date_keywords = ["del", "de fecha", "de"]
     
     has_immediate = any(keyword in lower_msg for keyword in immediate_read_keywords)
@@ -183,6 +174,7 @@ def detect_message_intent(user_message):
         "has_explicit_date": explicit_date is not None,
         "explicit_date": explicit_date
     }
+
 def detect_intent(user_message):
     """Detecta la intención del usuario de manera más robusta"""
     lower_msg = user_message.lower()
@@ -212,7 +204,6 @@ def parse_spanish_date_fragment(text):
     """
     text = text.lower().strip()
 
-    
     m = re.search(r'\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b', text)
     if m:
         d = int(m.group(1)); mo = int(m.group(2))
@@ -228,7 +219,6 @@ def parse_spanish_date_fragment(text):
         except Exception:
             return None
 
-    #  detect "20 de octubre" o "20 octubre 2025"
     m2 = re.search(r'\b(\d{1,2})\s*(?:de\s+)?([a-záéíóúñ]+)(?:\s+(\d{2,4}))?\b', text, flags=re.IGNORECASE)
     if m2:
         d = int(m2.group(1))
@@ -258,12 +248,22 @@ def _try_decode_bytes(b: bytes):
             return b.decode(enc), enc
         except Exception:
             continue
-    # fallback for safety
     return b.decode("latin-1", errors="replace"), "latin-1(replace)"
 
+def generate_unique_device_code(existing_codes):
+    """Genera un código de 6 dígitos que no existe en existing_codes"""
+    max_attempts = 100
+    for _ in range(max_attempts):
+        code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        if code not in existing_codes:
+            return code
+    # Si llegamos aquí, usar timestamp como fallback
+    import time
+    return str(int(time.time()))[-6:]
 
 class MemoryManager:
-    def __init__(self):
+    def __init__(self, device_id):
+        self.device_id = device_id
         self.memory_file = MEMORY_FILE
         self.conversation_file = CONVERSATION_FILE
         
@@ -386,7 +386,6 @@ class MemoryManager:
             print("Error guardando memoria:", e)
         
     async def add_important_memory(self, memory_text, category="personal"):
-        # Adds a new memory to the list and saves the file
         memory = await self.load_memory()
         new_memory = {
             "id": len(memory["important_memories"]) + 1,
@@ -400,28 +399,23 @@ class MemoryManager:
         return new_memory
         
     async def get_relevant_memories(self, query, limit=3):
-        # Finds memories related to the user's query
         memory = await self.load_memory()
         relevant = []
         query_words = query.lower().split()
         
-        # Simple relevance check based on keywords
         for mem in memory["important_memories"]:
             memory_text = mem["content"].lower()
             direct_match = any(word in memory_text for word in query_words if len(word) > 3)
             
-            # If it's a general question about memories, return recent ones
             if any(word in query.lower() for word in ["recuerdo", "recuerdos", "acuerdo", "memoria"]):
                 relevant.append(mem)
             elif direct_match:
                 relevant.append(mem)
         
-        # Sort by most recent first
         relevant.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         return relevant[:limit]
         
     async def save_conversation(self, user_message, assistant_response):
-        # Saves the user message and assistant's response to history with utf-8 safe I/O
         try:
             conversations = []
             if os.path.exists(self.conversation_file):
@@ -457,7 +451,6 @@ class MemoryManager:
                 "assistant": assistant_response
             }
             conversations.append(conversation_entry)
-            # Keep only the last 1000 entries
             if len(conversations) > 1000:
                 conversations = conversations[-1000:]
             async with aiofiles.open(self.conversation_file, 'w', encoding='utf-8') as f:
@@ -465,7 +458,76 @@ class MemoryManager:
         except Exception as e:
             print("Error guardando conversación:", e)
 
-memory_manager = MemoryManager()
+
+class DeviceConnectionManager:
+    def __init__(self):
+        self.connections_file = "device_connections.json"
+        self.connections = {}
+    
+    async def load_connections(self):
+        """Cargar conexiones desde archivo"""
+        try:
+            if os.path.exists(self.connections_file):
+                async with aiofiles.open(self.connections_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    self.connections = json.loads(content)
+                    print(f"📂 Cargadas {len(self.connections)} conexiones de dispositivos")
+            else:
+                self.connections = {}
+                print("📂 No hay conexiones previas de dispositivos")
+        except Exception as e:
+            print(f"Error cargando conexiones: {e}")
+            self.connections = {}
+    
+    async def save_connections(self):
+        """Guardar conexiones en archivo"""
+        try:
+            async with aiofiles.open(self.connections_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(self.connections, indent=2))
+        except Exception as e:
+            print(f"Error guardando conexiones: {e}")
+    
+    async def connect_device(self, device_id, device_code, chat_id):
+        """Conectar un dispositivo a un chat de Telegram"""
+        self.connections[device_id] = {
+            "chat_id": chat_id,
+            "device_code": device_code,
+            "connected_at": datetime.now().isoformat()
+        }
+        await self.save_connections()
+        print(f"🔗 Dispositivo {device_id} conectado a chat {chat_id}")
+    
+    async def disconnect_device(self, device_id):
+        """Desconectar un dispositivo"""
+        if device_id in self.connections:
+            del self.connections[device_id]
+            await self.save_connections()
+            print(f"🔗 Dispositivo {device_id} desconectado")
+    
+    async def get_chat_id_for_device(self, device_id):
+        """Obtener chat_id para un dispositivo"""
+        return self.connections.get(device_id, {}).get("chat_id")
+    
+    async def get_device_for_chat(self, chat_id):
+        """Obtener dispositivo para un chat"""
+        for device_id, info in self.connections.items():
+            if info.get("chat_id") == chat_id:
+                return device_id
+        return None
+
+
+device_manager = DeviceConnectionManager()
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+telegram_bot = None
+
+if TELEGRAM_TOKEN:
+    telegram_bot = FamilyMessagesBot(TELEGRAM_TOKEN)
+    from telegram_bot import set_device_manager
+    set_device_manager(device_manager)
+    print("✅ device_manager inyectado en telegram_bot")
+else:
+    print("⚠️ TELEGRAM_BOT_TOKEN no configurado - funcionalidad de mensajes familiares deshabilitada")
 
 async def send_data_update_to_client(websocket, memory_data, conversation_data):
     """Envía datos actualizados al cliente para guardar localmente"""
@@ -480,41 +542,113 @@ async def send_data_update_to_client(websocket, memory_data, conversation_data):
     except Exception as e:
         print("Error enviando actualización al cliente:", e)
 
-# WEBSOCKET
+
+# ============================================
+# WEBSOCKET ENDPOINT
+# ============================================
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("✅ Nueva conexión WebSocket establecida")
     
+    await device_manager.load_connections()
+    
+    device_id = None
+    device_code = None
+    
     try:
-        client_data = None
+        initial_data = None
         try:
             initial_msg = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
             data = json.loads(initial_msg)
             if data.get("type") == "initial_data":
-                client_data = data.get("data", {})
-                print("📥 Datos iniciales recibidos del cliente")
+                initial_data = data.get("data", {})
+                device_id = initial_data.get("device_id")
+                device_code = initial_data.get("device_code")
+                print(f"📥 Datos iniciales recibidos - Device: {device_id} - Código: {device_code}")
         except (asyncio.TimeoutError, json.JSONDecodeError, KeyError):
-            print("ℹ️ Cliente no envió datos iniciales, usando archivos locales")
+            print("ℹ️ Cliente no envió datos iniciales")
         
-        user_memory = await memory_manager.load_memory_from_client(
-            client_data.get("user_memory") if client_data else None
-        )
+        # Validar y generar device_id si es necesario
+        if not device_id or not device_code:
+            # Generar nuevo código de 6 dígitos
+            existing_codes = [info.get("device_code") for info in device_manager.connections.values()]
+            device_code = generate_unique_device_code(existing_codes)
+            device_id = f"device_{device_code}"
+            print(f"🆕 Nuevo dispositivo generado: {device_id} - Código: {device_code}")
+        else:
+            # Verificar si el device_id ya existe en las conexiones
+            if device_id in device_manager.connections:
+                # Dispositivo existente reconectándose
+                existing_code = device_manager.connections[device_id].get("device_code")
+                if existing_code != device_code:
+                    print(f"⚠️ Conflicto de código detectado - usando código existente")
+                    device_code = existing_code
+                print(f"🔄 Dispositivo existente reconectado: {device_id} - Código: {device_code}")
+            else:
+                # Nuevo dispositivo con ID del cliente
+                print(f"✅ Nuevo dispositivo registrado: {device_id} - Código: {device_code}")
         
-        conversation_history = await memory_manager.load_conversation_from_client(
-            client_data.get("conversation_history") if client_data else None
-        )
+        # Registrar dispositivo en device_manager
+        if device_id not in device_manager.connections:
+            device_manager.connections[device_id] = {
+                "device_code": device_code,
+                "connected_at": datetime.now().isoformat(),
+                "chat_id": None
+            }
+            await device_manager.save_connections()
+            print(f"📱 Dispositivo {device_id} registrado con código {device_code}")
+        else:
+            # Actualizar timestamp de última conexión
+            device_manager.connections[device_id]["last_connected"] = datetime.now().isoformat()
+            await device_manager.save_connections()
+        
+        # Crear memory manager
+        memory_manager = MemoryManager(device_id)
+        if not hasattr(device_manager, 'active_websockets'):
+            device_manager.active_websockets = {}
+        device_manager.active_websockets[device_id] = websocket
+        print(f"🔌 WebSocket registrado para dispositivo {device_id}")
+        # Enviar información del dispositivo INMEDIATAMENTE
+        await websocket.send_text(json.dumps({
+            "type": "device_info",
+            "device_id": device_id,
+            "device_code": device_code,
+            "connected_chat": await device_manager.get_chat_id_for_device(device_id)
+        }, ensure_ascii=False))
+
+        print(f"📤 Información del dispositivo enviada - Código disponible: {device_code}")
+        
+       
+        
+        # Mensaje de bienvenida inicial
         try:
-            await websocket.send_text(json.dumps({"type":"message","text":"Hola querido usuario. Soy Compa, tu compañero personal. Estoy aquí para ayudarte y conversar contigo."}, ensure_ascii=False))
+            current_hour = datetime.now().hour
+            
+            if 5 <= current_hour < 12:
+                greeting = "Buenos días"
+            elif 12 <= current_hour < 19:
+                greeting = "Buenas tardes"
+            else:
+                greeting = "Buenas noches"
+            
+            welcome_text = f"{greeting} querida, soy Compa. Estoy aquí para acompañarte. ¿Cómo te sientes?"
+            
+            await websocket.send_text(json.dumps({
+                "type": "message",
+                "text": welcome_text
+            }, ensure_ascii=False))
+            
+            print(f"👋 Mensaje de bienvenida enviado")
+            
         except Exception as e:
-            print("No se pudo enviar saludo inicial por WS:", e)
+            print(f"⚠️ Error enviando mensaje de bienvenida: {e}")
 
         awaiting_read_confirmation = False
         pending_family_messages = []
 
         while True:
-
             try:
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=300.0)
                 raw = data.strip()
@@ -523,6 +657,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 try:
                     maybe = json.loads(raw)
+                    
+                    # ⬇️ NUEVO: Manejar respuesta de conexión
+                    if isinstance(maybe, dict) and maybe.get("type") == "connection_response":
+                        request_id = maybe.get("request_id")
+                        approved = maybe.get("approved", False)
+                        
+                        if telegram_bot:
+                            await telegram_bot.process_connection_response(
+                                request_id, 
+                                approved, 
+                                websocket
+                            )
+                        continue
+                    
                     if isinstance(maybe, dict) and maybe.get("type") == "keepalive":
                         try:
                             await websocket.send_text(json.dumps({"type": "pong", "ts": datetime.now().timestamp()}, ensure_ascii=False))
@@ -558,14 +706,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     try:
                         print(f"🔍 Detectada solicitud de mensajes familiares: '{user_message}'")
                         
-                        
                         intent = detect_message_intent(user_message)
                         
                         if intent["has_explicit_date"]:
                             messages = await telegram_bot.get_messages_by_date(intent["explicit_date"])
                             message_type = f"del {intent['explicit_date']}"
                         elif intent["wants_old_messages"] or any(word in user_message.lower() for word in ["antiguos", "todos", "historial"]):
-                            # Todos los mensajes (antiguos)
                             all_messages = await telegram_bot.load_messages()
                             messages = all_messages
                             message_type = "guardados"
@@ -576,7 +722,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         print(f"📬 Mensajes {message_type} encontrados: {len(messages)}")
                         
                         if messages:
-
                             prompt = FAMILY_MESSAGES_PROMPT.format(
                                 count=len(messages),
                                 user_message=user_message
@@ -598,7 +743,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "type": "message",
                                 "text": ai_response,
                                 "has_family_messages": True,
-                                "messages": messages[:100]  
+                                "messages": messages[:100]
                             }, ensure_ascii=False))
                             
                             print(f"✅ Enviados {len(messages)} mensajes {message_type} para lectura")
@@ -628,13 +773,10 @@ async def websocket_endpoint(websocket: WebSocket):
                             pass
                         continue
 
-
-
-                # search relevant memories
                 relevant_memories = await memory_manager.get_relevant_memories(user_message)
                 memory_context = ""
                 if relevant_memories:
-                            memory_context = "\n".join([f"- {mem['content']}" for mem in relevant_memories])
+                    memory_context = "\n".join([f"- {mem['content']}" for mem in relevant_memories])
                         
                 full_prompt = f"""
 Eres "Compa", un compañero conversacional afectuoso.
@@ -668,6 +810,7 @@ Respuesta:
                     print(f"DEBUG: Recuerdo guardado: {new_memory['id']}")
                                     
                     updated_memory = await memory_manager.load_memory()
+                    conversation_history = await memory_manager.load_conversation_from_file()
                     await send_data_update_to_client(
                         websocket, 
                         updated_memory, 
@@ -724,7 +867,6 @@ Tu respuesta (1-2 frases, tono afectuoso):
 
                         print(f"DEBUG: Prompt enviado: {full_prompt}")
 
-                        # Gemini call
                         response = model.generate_content(full_prompt)
                         ai_response = response.text.strip()
 
@@ -741,7 +883,6 @@ Tu respuesta (1-2 frases, tono afectuoso):
                                 memory_summary = ". ".join([mem["content"] for mem in relevant_memories[:2]])
                                 ai_response = f"Recuerdo que me contaste: {memory_summary}. ¡Son momentos muy especiales!"
 
-                        # TODOOOOOOOO CHAGNE
                         sentences = [s.strip() for s in ai_response.split('.') if s.strip()]
                         if len(sentences) > 2:
                             ai_response = '. '.join(sentences[:2]) + '.'
@@ -790,6 +931,10 @@ Tu respuesta (1-2 frases, tono afectuoso):
     except WebSocketDisconnect as ws_exc:
         code = getattr(ws_exc, 'code', None)
         print(f"🔌 Cliente desconectado. WebSocketDisconnect code={code}")
+        if hasattr(device_manager, 'active_websockets') and device_id:
+            if device_id in device_manager.active_websockets:
+                del device_manager.active_websockets[device_id]
+                print(f"🗑️ WebSocket eliminado para dispositivo {device_id}")
     except Exception as e:
         print(f"❌ Error en WebSocket: {e}")
         traceback.print_exc()
@@ -798,10 +943,13 @@ Tu respuesta (1-2 frases, tono afectuoso):
         except:
             pass
 
-# HTTP endpoints for utilities and memory management
+
+# ============================================
+# HTTP ENDPOINTS - UTILITIES
+# ============================================
+
 @app.get("/search")
 async def search_web(query: str):
-    # Searches the web using googlesearch library
     try:
         results = []
         for result in search(query, num_results=3, lang="es"):
@@ -810,9 +958,18 @@ async def search_web(query: str):
     except Exception as e:
         return {"error": str(e)}
 
+
+# ============================================
+# MEMORY MANAGEMENT HTTP ENDPOINTS
+# ============================================
+
 @app.get("/memory/cofre")
-async def get_memory_cofre():
-    # Returns all important memories
+async def get_memory_cofre(device_id: str):
+    """Returns all important memories for a specific device"""
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id requerido")
+    
+    memory_manager = MemoryManager(device_id)
     memory = await memory_manager.load_memory()
     return {
         "important_memories": memory["important_memories"],
@@ -821,9 +978,15 @@ async def get_memory_cofre():
 
 @app.post("/memory/cofre")
 async def add_memory_cofre(memory_data: dict):
-    # Manually adds a new memory
+    """Manually adds a new memory"""
+    device_id = memory_data.get("device_id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id requerido")
+    
+    memory_manager = MemoryManager(device_id)
     memory_text = memory_data.get("content", "")
     category = memory_data.get("category", "personal")
+    
     if memory_text:
         new_memory = await memory_manager.add_important_memory(memory_text, category)
         return {"message": "Recuerdo guardado exitosamente", "memory": new_memory}
@@ -831,8 +994,12 @@ async def add_memory_cofre(memory_data: dict):
         raise HTTPException(status_code=400, detail="El contenido del recuerdo no puede estar vacío")
 
 @app.get("/memory/search")
-async def search_memories(query: str):
-    # Searches for relevant memories
+async def search_memories(device_id: str, query: str):
+    """Searches for relevant memories"""
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id requerido")
+    
+    memory_manager = MemoryManager(device_id)
     relevant_memories = await memory_manager.get_relevant_memories(query)
     return {
         "query": query,
@@ -841,23 +1008,33 @@ async def search_memories(query: str):
     }
 
 @app.get("/debug/memory")
-async def debug_memory():
-    # Debug endpoint to check memory status
+async def debug_memory(device_id: str):
+    """Debug endpoint to check memory status"""
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id requerido")
+    
+    memory_manager = MemoryManager(device_id)
     memory = await memory_manager.load_memory()
     return {
+        "device_id": device_id,
         "total_memories": len(memory["important_memories"]),
         "all_memories": memory["important_memories"],
-        "memory_file_exists": os.path.exists(MEMORY_FILE)
+        "memory_file_exists": os.path.exists(memory_manager.memory_file)
     }
 
 @app.get("/memory/verify")
-async def verify_memory_usage():
-    # Test memory search function
+async def verify_memory_usage(device_id: str):
+    """Test memory search function"""
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id requerido")
+    
+    memory_manager = MemoryManager(device_id)
     memory = await memory_manager.load_memory()
     test_query = "mis recuerdos"
     relevant_memories = await memory_manager.get_relevant_memories(test_query)
     
     return {
+        "device_id": device_id,
         "total_memories": len(memory["important_memories"]),
         "test_query": test_query,
         "found_memories": len(relevant_memories),
@@ -865,7 +1042,9 @@ async def verify_memory_usage():
     }
 
 
+# ============================================
 # FAMILY MESSAGES ENDPOINTS
+# ============================================
 
 @app.get("/family/messages")
 async def get_family_messages():
@@ -877,13 +1056,12 @@ async def get_family_messages():
         all_messages = await telegram_bot.load_messages()
         unread_messages = [msg for msg in all_messages if not msg.get("read", False)]
         
-       
         all_messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         unread_messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
         return {
-            "messages": unread_messages,  
-            "all_messages": all_messages, 
+            "messages": unread_messages,
+            "all_messages": all_messages,
             "total_unread": len(unread_messages),
             "total_messages": len(all_messages)
         }
@@ -928,7 +1106,6 @@ async def get_messages_by_date(date: str):
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     
     try:
-        # Change format from URL (dd-mm-yyyy) to internal format (dd/mm/yyyy)
         date_formatted = date.replace("-", "/")
         messages = await telegram_bot.get_messages_by_date(date_formatted)
         return {
@@ -955,7 +1132,9 @@ async def mark_message_read(message_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ADMIN ENDPOINTS - auth users
+# ============================================
+# ADMIN ENDPOINTS
+# ============================================
 
 @app.get("/admin/authorized-users")
 async def get_authorized_users():
@@ -1024,7 +1203,6 @@ async def get_pending_requests():
         messages = await telegram_bot.load_messages()
         authorized = await telegram_bot.load_authorized_users()
         
-        
         all_users = {}
         for msg in messages:
             cid = msg.get("chat_id")
@@ -1045,7 +1223,11 @@ async def get_pending_requests():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Frontend static file serving
+
+# ============================================
+# FRONTEND STATIC FILES
+# ============================================
+
 script_dir = os.path.dirname(__file__)
 project_root = os.path.abspath(os.path.join(script_dir, '..'))
 frontend_path = os.path.join(project_root, 'frontend')
@@ -1057,14 +1239,12 @@ except Exception as ex:
     print("No se encontró frontend folder:", ex)
 
 if os.path.isdir(frontend_path):
-    # Mount static files for the frontend
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 else:
     print("Warning: frontend_path does not exist.")
 
 @app.get("/")
 async def read_root():
-   
     index_file = os.path.join(frontend_path, 'index.html')
     if os.path.exists(index_file):
         return FileResponse(index_file)
@@ -1080,7 +1260,6 @@ async def favicon():
 
 @app.get("/health")
 async def health_check():
-    # Simple health check endpoint
     return {
         "status": "running",
         "ai_provider": "google_gemini",
@@ -1089,7 +1268,11 @@ async def health_check():
         "telegram_configured": telegram_bot is not None
     }
 
-# Events
+
+# ============================================
+# EVENTS
+# ============================================
+
 @app.on_event("startup")
 async def startup_event():
     """Inicia el bot de Telegram al arrancar la app"""
@@ -1103,13 +1286,10 @@ async def shutdown_event():
     if telegram_bot:
         await telegram_bot.stop_bot()
 
-# Server execution
-# if __name__ == "__main__":
-#     print("Starting server with Google Gemini API")
-#     print(f"Model: {GEMINI_MODEL}")
-#     uvicorn.run("main:app", host="localhost", port=8000, reload=True)
 
-
+# ============================================
+# SERVER EXECUTION
+# ============================================
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
