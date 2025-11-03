@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy import select, or_, func
-from .database import async_session, Memory, init_db
+from .database import async_session, Memory, init_db, DeviceData
 import uvicorn
 import os
 import json
@@ -94,7 +94,7 @@ TÉCNICAS CONVERSACIONALES:
    "Cuéntame sobre… parece un día feliz" / "¿Qué se sentía al bailar esta canción?"
 
 ⎔ **Validación emocional**:
-   "Veo que esto te emociona mucho…" / "Me encanta escucharte hablar de esto"
+   "Veo que esto te emociona mucho…" / "Me encanta escucharte hablar de
 
 ⎔ **Conexión afectiva**:
    "Parece que extrañas mucho a tu mamá. Cuéntame cómo era ella"
@@ -307,6 +307,30 @@ def generate_unique_device_code(existing_codes):
 # Manager class for user memory operations (emotion tracking, important memories, preferences)
 
 class MemoryManager:
+    async def save_memory(self, memory_data):
+        """Save memory data to database"""
+        from backend.database import async_session, DeviceData
+        from sqlalchemy import select
+        try:
+            async with async_session() as session:
+                stmt = select(DeviceData).where(DeviceData.device_id == self.device_id)
+                result = await session.execute(stmt)
+                device_data = result.scalar_one_or_none()
+                if not device_data:
+                    device_data = DeviceData(
+                        device_id=self.device_id,
+                        user_memory=memory_data,
+                        conversation_history=[]
+                    )
+                    session.add(device_data)
+                else:
+                    device_data.user_memory = memory_data
+                await session.commit()
+                print(f"✅ Memoria guardada en DB para {self.device_id}")
+        except Exception as e:
+            print(f"❌ Error saving memory to DB: {e}")
+            import traceback
+            traceback.print_exc()
     def __init__(self, device_id):
         self.device_id = device_id
         # No longer need local files, everything goes to PostgreSQL
@@ -318,27 +342,49 @@ class MemoryManager:
     # ========== MEMORY MANAGEMENT ==========
     
     async def load_memory(self):
-        """Load all user memories from the database"""
-        async with async_session() as session:
-            stmt = select(Memory).where(
-                Memory.device_id == self.device_id
-            ).order_by(Memory.timestamp.desc())
-            
-            result = await session.execute(stmt)
-            memories = result.scalars().all()
-            
+        """Load user memory from database or initialize if not exists"""
+        from backend.database import async_session, DeviceData
+        from sqlalchemy import select
+        try:
+            async with async_session() as session:
+                stmt = select(DeviceData).where(DeviceData.device_id == self.device_id)
+                result = await session.execute(stmt)
+                device_data = result.scalar_one_or_none()
+                if device_data and device_data.user_memory:
+                    print(f"📂 Memoria cargada desde DB para {self.device_id}")
+                    return device_data.user_memory
+                # Initialize default memory if not exists
+                initial_memory = {
+                    "user_preferences": {},
+                    "important_memories": [],
+                    "family_members": [],
+                    "daily_routine": {},
+                    "emotional_state": "calm"
+                }
+                # Save initial memory to DB
+                if not device_data:
+                    device_data = DeviceData(
+                        device_id=self.device_id,
+                        user_memory=initial_memory,
+                        conversation_history=[]
+                    )
+                    session.add(device_data)
+                else:
+                    device_data.user_memory = initial_memory
+                await session.commit()
+                print(f"✅ Memoria inicial creada en DB para {self.device_id}")
+                return initial_memory
+        except Exception as e:
+            print(f"❌ Error loading memory from DB: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to default memory
             return {
-                "device_id": self.device_id,
-                "important_memories": [
-                    {
-                        "id": m.id,
-                        "content": m.content,
-                        "category": m.category,
-                        "timestamp": m.timestamp.isoformat(),
-                        "last_recalled": m.last_recalled.isoformat() if m.last_recalled else None
-                    }
-                    for m in memories
-                ]
+                "user_preferences": {},
+                "important_memories": [],
+                "family_members": [],
+                "daily_routine": {},
+                "emotional_state": "calm"
             }
     
     async def add_important_memory(self, memory_text, category="personal"):
@@ -414,13 +460,14 @@ class MemoryManager:
             return []
     
     async def save_conversation(self, user_message, assistant_response):
-        """Save a conversation turn to the database"""
+        """Save conversation turn to database"""
+        from backend.database import async_session, DeviceData
+        from sqlalchemy import select
+        
         try:
             async with async_session() as session:
-                # Find or create DeviceData
-                stmt = select(DeviceData).where(
-                    DeviceData.device_id == self.device_id
-                )
+                # Get or create device data
+                stmt = select(DeviceData).where(DeviceData.device_id == self.device_id)
                 result = await session.execute(stmt)
                 device_data = result.scalar_one_or_none()
                 
@@ -438,21 +485,23 @@ class MemoryManager:
                     "assistant": assistant_response
                 }
                 
-                conversations = device_data.conversation_history or []
-                conversations.append(conversation_entry)
+                # Ensure conversation_history is a list
+                if not isinstance(device_data.conversation_history, list):
+                    device_data.conversation_history = []
                 
-                # Keep rolling window of last 1000 conversations
-                if len(conversations) > 1000:
-                    conversations = conversations[-1000:]
+                device_data.conversation_history.append(conversation_entry)
                 
-                device_data.conversation_history = conversations
-                device_data.last_updated = datetime.utcnow()
+                # Keep only last 1000 conversations
+                if len(device_data.conversation_history) > 1000:
+                    device_data.conversation_history = device_data.conversation_history[-1000:]
                 
                 await session.commit()
-                print(f"✅ Conversation saved to DB for {self.device_id}")
+                print(f"✅ Conversación guardada en DB para {self.device_id}")
                 
         except Exception as e:
             print(f"❌ Error saving conversation to DB: {e}")
+            import traceback
+            traceback.print_exc()
     
     # ========== CLIENT COMPATIBILITY (Optional) ==========
     
@@ -467,12 +516,23 @@ class MemoryManager:
         """Prepare memory data to send to client (read-only)"""
         return await self.load_memory()
     
-    async def load_conversation_from_client(self, client_data):
-        """
-        Compatibility: always load from DB
-        (If you want to migrate client data, implement here)
-        """
-        return await self.load_conversation()
+
+# Helper function to load conversation history from database
+async def load_conversation_from_db(device_id: str) -> list:
+    """Helper function to load conversation history from database"""
+    try:
+        from backend.database import async_session, DeviceData
+        from sqlalchemy import select
+        async with async_session() as session:
+            stmt = select(DeviceData).where(DeviceData.device_id == device_id)
+            result = await session.execute(stmt)
+            device_data = result.scalar_one_or_none()
+            if device_data and isinstance(device_data.conversation_history, list):
+                return device_data.conversation_history
+            return []
+    except Exception as e:
+        print(f"❌ Error loading conversation from DB: {e}")
+        return []
 
 
 # Tracks which device is connected to which Telegram chat for message delivery
@@ -902,7 +962,7 @@ Respuesta:
                     
                     # Send updated memory data to client for local sync
                     updated_memory = await memory_manager.load_memory()
-                    conversation_history = await memory_manager.load_conversation_from_file()
+                    conversation_history = await load_conversation_from_db(device_id)
                     await send_data_update_to_client(
                         websocket, 
                         updated_memory, 
@@ -1016,8 +1076,21 @@ Tu respuesta (1-2 frases, tono afectuoso):
                 try:
                     # Save conversation turn to persistent history
                     await memory_manager.save_conversation(user_message, ai_response)
-                    # Sync updated conversation history to client
-                    conversation_history = await memory_manager.load_conversation_from_file()
+                    
+                    # Load updated conversation history from DB
+                    try:
+                        from backend.database import async_session, DeviceData
+                        from sqlalchemy import select
+                        
+                        async with async_session() as session:
+                            stmt = select(DeviceData).where(DeviceData.device_id == device_id)
+                            result = await session.execute(stmt)
+                            device_data = result.scalar_one_or_none()
+                            conversation_history = device_data.conversation_history if device_data else []
+                    except Exception as e:
+                        print(f"Error cargando historial: {e}")
+                        conversation_history = []
+                        
                     updated_memory = await memory_manager.load_memory()
                     await send_data_update_to_client(
                         websocket, 
