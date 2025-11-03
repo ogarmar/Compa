@@ -5,19 +5,25 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import aiofiles
+try:
+    from .main import link_chat_to_device, get_device_from_chat_db
+except ImportError:
+    from backend.main import link_chat_to_device, get_device_from_chat_db
 
 # File paths for persistent data storage
 FAMILY_MESSAGES_FILE = "family_messages.json"
 AUTHORIZED_USERS_FILE = "authorized_users.json"
 
-# Global variable to manage device connections
-device_manager = None
+# These will act as pointers to main.py's global dictionaries
+ACTIVE_WEBSOCKETS = {}
+PENDING_REQUESTS = {}
 
-def set_device_manager(manager):
-    """Configure the device_manager from main.py to enable device connectivity"""
-    global device_manager
-    device_manager = manager
-    print(f"✅ device_manager configured in telegram_bot")
+def set_shared_state(active_ws: dict, pending_req: dict):
+    """Receives global dictionaries from main.py"""
+    global ACTIVE_WEBSOCKETS, PENDING_REQUESTS
+    ACTIVE_WEBSOCKETS = active_ws
+    PENDING_REQUESTS = pending_req
+    print("✅ Global state received in telegram_bot")
 
 
 # Main bot class handling all Telegram messaging and device connection logic
@@ -65,12 +71,9 @@ class FamilyMessagesBot:
         """Add a new authorized user and load active device connections"""
         users = await self.load_authorized_users()
 
-        # Load and display registered devices when authorizing new users
-        if device_manager:
-            await device_manager.load_connections()
-            print(f"📱 {len(device_manager.connections)} dispositivos registrados")
-        else:
-            print("⚠️ device_manager no configurado correctamente")
+        # Note: We no longer need to display device information here since it's in the DB
+        print("✅ Bot de Telegram iniciado correctamente")
+        print("🔗 Sistema de conexión por código activado")
 
         print("✅ Bot de Telegram iniciado correctamente")
 
@@ -244,13 +247,7 @@ El mensaje llegará directamente al dispositivo conectado."""
             preview = msg['message'][:50] + "..." if len(msg['message']) > 50 else msg['message']
             response += f"{status} - {date}\n_{preview}_\n\n"
         
-        # Debug: Print available device codes for troubleshooting
-        device_code = context.args[0]
-        print(f"🔍 Buscando código: {device_code}")
-        print(f"🔍 Dispositivos disponibles: {list(device_manager.connections.keys())}")
-        print(f"🔍 Códigos disponibles: {[info.get('device_code') for info in device_manager.connections.values()]}")
-
-        target_device_id = None
+        # Note: We no longer need to print device information since it's in the DB
 
         await update.message.reply_text(response, parse_mode="Markdown")
     
@@ -274,15 +271,11 @@ El mensaje llegará directamente al dispositivo conectado."""
             
             device_code = context.args[0]
             
-            # Search for device matching the provided code
-            target_device_id = None
-            for device_id, info in device_manager.connections.items():
-                if info.get("device_code") == device_code:
-                    target_device_id = device_id
-                    break
+            # First try to link the chat to the device
+            success = await link_chat_to_device(device_code, str(chat_id))
             
             # Handle case where device code is not found or device is offline
-            if not target_device_id:
+            if not success:
                 await update.message.reply_text(
                     "❌ *Código no encontrado*\n\n"
                     "Verifica que el código sea correcto y que la aplicación esté abierta en el dispositivo.",
@@ -290,15 +283,14 @@ El mensaje llegará directamente al dispositivo conectado."""
                 )
                 return
             
+            # Get device ID after successful link
+            target_device_id = await get_device_from_chat_db(str(chat_id))
+            
             # Create pending connection request object with unique request ID
             request_id = f"req_{chat_id}_{int(datetime.now().timestamp())}"
             
-            # Initialize pending_requests dict if it doesn't exist
-            if not hasattr(device_manager, 'pending_requests'):
-                device_manager.pending_requests = {}
-            
             # Store connection request with user and device information
-            device_manager.pending_requests[request_id] = {
+            PENDING_REQUESTS[request_id] = {
                 "chat_id": chat_id,
                 "user_name": user_name,
                 "user_full_name": user_full_name,
@@ -341,7 +333,7 @@ El mensaje llegará directamente al dispositivo conectado."""
                     parse_mode="Markdown"
                 )
                 # Clean up failed request from pending list
-                del device_manager.pending_requests[request_id]
+                PENDING_REQUESTS.pop(request_id,  None)
             
         except Exception as e:
             print(f"Error en comando connect: {e}")
@@ -351,12 +343,8 @@ El mensaje llegará directamente al dispositivo conectado."""
 
     async def notify_device_connection_request(self, device_id, request_id, user_info):
         """Send connection request notification to device via WebSocket"""
-        # Initialize active_websockets dict if it doesn't exist
-        if not hasattr(device_manager, 'active_websockets'):
-            device_manager.active_websockets = {}
-        
         # Retrieve WebSocket connection for the target device
-        websocket = device_manager.active_websockets.get(device_id)
+        websocket = ACTIVE_WEBSOCKETS.get(device_id)
         
         if websocket:
             try:
@@ -377,12 +365,8 @@ El mensaje llegará directamente al dispositivo conectado."""
 
     async def process_connection_response(self, request_id, approved, websocket):
         """Process device's approval or rejection of connection request"""
-        # Validate that pending_requests dict exists
-        if not hasattr(device_manager, 'pending_requests'):
-            return False
-        
         # Retrieve the pending request
-        request = device_manager.pending_requests.get(request_id)
+        request = PENDING_REQUESTS.get(request_id)
         
         if not request:
             print(f"⚠️ Solicitud {request_id} no encontrada")
@@ -395,13 +379,12 @@ El mensaje llegará directamente al dispositivo conectado."""
         device_code = request['device_code']
         
         if approved:
-            # Disconnect existing device connection for this chat if one exists
-            current_device = await device_manager.get_device_for_chat(chat_id)
-            if current_device:
-                await device_manager.disconnect_device(current_device)
+            # Establish new device connection using database
+            success = await link_chat_to_device(device_code, str(chat_id))
             
-            # Establish new device connection
-            await device_manager.connect_device(device_id, device_code, chat_id)
+            if not success:
+                print(f"❌ Error linking chat {chat_id} to device with code {device_code}")
+                return False
             
             # Send approval confirmation to Telegram user
             try:
@@ -442,7 +425,7 @@ El mensaje llegará directamente al dispositivo conectado."""
             print(f"❌ Conexión rechazada: Chat {chat_id} → Dispositivo {device_id}")
         
         # Update and remove request from pending list
-        del device_manager.pending_requests[request_id]
+        del PENDING_REQUESTS[request_id]
         request['status'] = 'approved' if approved else 'rejected'
         
         return True
@@ -451,12 +434,12 @@ El mensaje llegará directamente al dispositivo conectado."""
         """Handle /disconnect command - terminate device connection for this chat"""
         try:
             chat_id = update.effective_chat.id
-            # Retrieve device currently connected to this chat
-            device_id = await device_manager.get_device_for_chat(chat_id)
+            # Retrieve device currently connected to this chat from database
+            device_id = await get_device_from_chat_db(str(chat_id))
             
             if device_id:
-                # Disconnect the device
-                await device_manager.disconnect_device(device_id)
+                # We don't need to explicitly disconnect since we'll just 
+                # overwrite the chat_id when connecting to a new device
                 await update.message.reply_text(
                     "✅ *Desconectado correctamente*\n\n"
                     "Ya no enviarás mensajes a ningún dispositivo.",
@@ -478,23 +461,14 @@ El mensaje llegará directamente al dispositivo conectado."""
         """Handle /status command - show current connection status and details"""
         try:
             chat_id = update.effective_chat.id
-            # Retrieve connected device for this chat
-            device_id = await device_manager.get_device_for_chat(chat_id)
+            # Retrieve connected device for this chat from database
+            device_id = await get_device_from_chat_db(str(chat_id))
             
             if device_id:
-                # Get device information and calculate connection duration
-                device_info = device_manager.connections.get(device_id, {})
-                connected_time = datetime.fromisoformat(device_info.get('connected_at', datetime.now().isoformat()))
-                time_ago = datetime.now() - connected_time
-                hours = int(time_ago.total_seconds() // 3600)
-                minutes = int((time_ago.total_seconds() % 3600) // 60)
-                
-                # Display connection status with details
+                # Show simplified status since we don't store connection time in DB
                 await update.message.reply_text(
                     f"📱 *Estado de Conexión*\n\n"
-                    f"• Conectado al dispositivo: `{device_info.get('device_code', 'N/A')}`\n"
-                    f"• Conectado desde: {connected_time.strftime('%d/%m/%Y %H:%M')}\n"
-                    f"• Tiempo conectado: {hours}h {minutes}m\n\n"
+                    f"• Dispositivo ID: `{device_id}`\n\n"
                     f"Usa `/disconnect` para desconectarte.",
                     parse_mode="Markdown"
                 )
@@ -517,8 +491,8 @@ El mensaje llegará directamente al dispositivo conectado."""
         user_name = update.effective_user.first_name
         message_text = update.message.text
         
-        # Verify user has an active device connection
-        device_id = await device_manager.get_device_for_chat(chat_id)
+        # Verify user has an active device connection using database
+        device_id = await get_device_from_chat_db(str(chat_id))
         if not device_id:
             await update.message.reply_text(
                 "❌ *No estás conectado a ningún dispositivo*\n\n"
@@ -540,7 +514,7 @@ El mensaje llegará directamente al dispositivo conectado."""
             await update.message.reply_text(
                 f"✅ *Mensaje enviado correctamente*\n\n"
                 f"👤 De: {user_name}\n"
-                f"📱 A: Dispositivo `{device_manager.connections[device_id].get('device_code', 'N/A')}`\n"
+                f"📱 A: Dispositivo `{device_id}`\n"
                 f"📅 Fecha: {date_formatted}\n"
                 f"🕐 Hora: {tifme_formatted}\n\n"
                 f"💬 *Vista previa:*\n{message_text[:100]}{'...' if len(message_text) > 100 else ''}",

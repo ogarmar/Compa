@@ -3,12 +3,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, Column, String, JSON, DateTime
+from sqlalchemy.sql import text
 from .database import async_session, Memory, init_db, DeviceData
 import uvicorn
 import os
 import json
-import aiofiles
 import re
 from datetime import datetime
 from dotenv import load_dotenv
@@ -16,18 +16,16 @@ import asyncio
 from googlesearch import search
 import traceback
 import google.generativeai as genai
-import re
-from datetime import datetime
 import uuid
 from collections import defaultdict
 
-# Import custom Telegram bot handler (fallback to local import if package not found)
+# Local imports
 try:
     from .telegram_bot import FamilyMessagesBot
-    from .telegram_bot import set_device_manager
 except ImportError:
     from backend.telegram_bot import FamilyMessagesBot
-    from backend.telegram_bot import set_device_manager
+
+# Telegram bot handler comment moved to imports section
 
 # Dictionary mapping Spanish month names to month numbers for date parsing
 SPANISH_MONTHS = {
@@ -51,6 +49,10 @@ load_dotenv()
 # Initialize FastAPI application
 app = FastAPI(title="Asistente Alzheimer", version="1.0.0")
 
+# Global dictionaries to track real-time state
+ACTIVE_WEBSOCKETS = {}
+PENDING_REQUESTS = {}
+
 # Configure CORS middleware to allow cross-origin requests
 app.add_middleware(
     CORSMiddleware,
@@ -64,15 +66,48 @@ app.add_middleware(
 GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
 if not GEMINI_TOKEN:
     print("ERROR: GEMINI_TOKEN not found in environment variables.")
+    GEMINI_CLIENT = None
 else:
     genai.configure(api_key=GEMINI_TOKEN)
 
 # Specify the Gemini model to use (DO NOT CHANGE THIS MODEL)
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
-# File paths for persistent data storage
-MEMORY_FILE = "user_memory.json"
-CONVERSATION_FILE = "conversation_history.json"
+# Initialize Gemini client ONCE
+GEMINI_CLIENT = genai.GenerativeModel(GEMINI_MODEL) if GEMINI_TOKEN else None
+
+# Regex patterns for memory detection
+memory_patterns = [
+    r'\b(me\s+)?acuerdo\s+(de|que|cuando)\b',  
+    r'\brecuerdo\s+(que|cuando|a|el|la)\b',     
+    r'\bmi\s+(hijo|hija|esposo|esposa|mamá|papá|familia|nieto|nieta)\b',
+    r'\bcuando\s+(era|vivía|trabajaba|estaba)\b',
+    r'\b(extraño|añoro)\s+(a|mucho)\b',
+    r'\b(me\s+gustaba|disfrutaba|me\s+encantaba)\b',
+    r'\ben\s+mi\s+(infancia|juventud)\b',
+    r'\bqué\s+ilusión\b',
+    r'\baquella\s+vez\b',
+    r'\bsiempre\s+(he|me)\b',
+]
+memory_regex = re.compile('|'.join(memory_patterns), re.IGNORECASE)
+
+def is_question(text):
+    """Detecta si el mensaje es una pregunta"""
+    text_lower = text.lower().strip()
+    
+    if text_lower.startswith('¿') or text_lower.endswith('?'):
+        return True
+    
+    question_words = [
+        'qué', 'quién', 'cómo', 'cuándo', 'dónde', 'por qué', 'cuál', 
+        'tienes', 'hay', 'sabes', 'conoces', 'puedes', 'podrías'
+    ]
+
+    first_words = text_lower.split()[:2]
+    if any(qw in first_words for qw in question_words):
+        return True
+    
+    return False
 
 # Comprehensive system prompt for the AI assistant
 # Instructs the model to behave as "Compa", an empathetic conversational companion
@@ -304,47 +339,16 @@ def generate_unique_device_code(existing_codes):
     import time
     return str(int(time.time()))[-6:]
 
-# Manager class for user memory operations (emotion tracking, important memories, preferences)
 
 class MemoryManager:
-    async def save_memory(self, memory_data):
-        """Save memory data to database"""
-        from backend.database import async_session, DeviceData
-        from sqlalchemy import select
-        try:
-            async with async_session() as session:
-                stmt = select(DeviceData).where(DeviceData.device_id == self.device_id)
-                result = await session.execute(stmt)
-                device_data = result.scalar_one_or_none()
-                if not device_data:
-                    device_data = DeviceData(
-                        device_id=self.device_id,
-                        user_memory=memory_data,
-                        conversation_history=[]
-                    )
-                    session.add(device_data)
-                else:
-                    device_data.user_memory = memory_data
-                await session.commit()
-                print(f"✅ Memoria guardada en DB para {self.device_id}")
-        except Exception as e:
-            print(f"❌ Error saving memory to DB: {e}")
-            import traceback
-            traceback.print_exc()
-    def __init__(self, device_id):
+    """
+    Gestiona la memoria y el historial de conversación para un device_id específico.
+    """
+    def __init__(self, device_id: str):
         self.device_id = device_id
-        # No longer need local files, everything goes to PostgreSQL
-    
-    async def initialize(self):
-        """Initialize the database (call after creating the instance)"""
-        await init_db()
-    
-    # ========== MEMORY MANAGEMENT ==========
     
     async def load_memory(self):
         """Load user memory from database or initialize if not exists"""
-        from backend.database import async_session, DeviceData
-        from sqlalchemy import select
         try:
             async with async_session() as session:
                 stmt = select(DeviceData).where(DeviceData.device_id == self.device_id)
@@ -386,7 +390,7 @@ class MemoryManager:
                 "daily_routine": {},
                 "emotional_state": "calm"
             }
-    
+        
     async def add_important_memory(self, memory_text, category="personal"):
         """Add a new important memory to the database"""
         async with async_session() as session:
@@ -406,46 +410,60 @@ class MemoryManager:
                 "timestamp": new_memory.timestamp.isoformat(),
                 "last_recalled": None
             }
-    
-    async def get_relevant_memories(self, query, limit=3):
-        """Search for relevant memories based on keywords"""
-        query_words = [w.lower() for w in query.split() if len(w) > 3]
         
-        async with async_session() as session:
-            stmt = select(Memory).where(
-                Memory.device_id == self.device_id
-            )
-            
-            # Basic keyword filter
-            if query_words:
-                conditions = [
-                    func.lower(Memory.content).contains(word) 
-                    for word in query_words
+    async def get_relevant_memories(self, query, limit=3):
+        """Retrieve relevant memories based on query keywords from database"""
+        try:
+            # Extraer palabras clave relevantes (>3 caracteres)
+            query_words = [w.lower() for w in query.split() if len(w) > 3]
+            async with async_session() as session:
+                stmt = select(Memory).where(
+                    Memory.device_id == self.device_id
+                )
+                # Filtrar por keywords si existen
+                if query_words:
+                    conditions = [
+                        func.lower(Memory.content).contains(word)
+                        for word in query_words
+                    ]
+                    stmt = stmt.where(or_(*conditions))
+                # Incluir TODOS los recuerdos si la query contiene palabras clave de memoria
+                memory_keywords = ["recuerdo", "recuerdos", "acuerdo", "memoria", "cofre", "guardado"]
+                if any(word in query.lower() for word in memory_keywords):
+                    # Devolver TODOS los recuerdos, no solo los que coinciden
+                    stmt = select(Memory).where(Memory.device_id == self.device_id)
+                    stmt = stmt.order_by(Memory.timestamp.desc()).limit(20)  # Últimos 20
+                else:
+                    # Búsqueda normal con keywords
+                    stmt = stmt.order_by(Memory.timestamp.desc()).limit(limit)
+                result = await session.execute(stmt)
+                memories = result.scalars().all()
+                # Actualizar last_recalled para los recuerdos recuperados
+                if memories:
+                    for mem in memories:
+                        mem.last_recalled = datetime.now()
+                    await session.commit()
+                # Convertir a formato esperado
+                memories_list = [
+                    {
+                        "id": m.id,
+                        "content": m.content,
+                        "category": m.category,
+                        "timestamp": m.timestamp.isoformat(),
+                        "last_recalled": m.last_recalled.isoformat() if m.last_recalled else None
+                    }
+                    for m in memories
                 ]
-                stmt = stmt.where(or_(*conditions))
-            
-            stmt = stmt.order_by(Memory.timestamp.desc()).limit(limit)
-            result = await session.execute(stmt)
-            memories = result.scalars().all()
-            
-            # Update last_recalled timestamp
-            for m in memories:
-                m.last_recalled = datetime.utcnow()
-            await session.commit()
-            
-            return [
-                {
-                    "id": m.id,
-                    "content": m.content,
-                    "category": m.category,
-                    "timestamp": m.timestamp.isoformat(),
-                    "last_recalled": m.last_recalled.isoformat() if m.last_recalled else None
-                }
-                for m in memories
-            ]
-    
-    # ========== CONVERSATION MANAGEMENT ==========
-    
+                print(f"🔍 Encontrados {len(memories_list)} recuerdos relevantes para '{query}'")
+                return memories_list
+        except Exception as e:
+            print(f"❌ Error en get_relevant_memories: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+        
+        # ========== CONVERSATION MANAGEMENT ==========
+        
     async def load_conversation(self):
         """Load conversation history from the database"""
         async with async_session() as session:
@@ -458,12 +476,9 @@ class MemoryManager:
             if device_data and device_data.conversation_history:
                 return device_data.conversation_history
             return []
-    
+        
     async def save_conversation(self, user_message, assistant_response):
         """Save conversation turn to database"""
-        from backend.database import async_session, DeviceData
-        from sqlalchemy import select
-        
         try:
             async with async_session() as session:
                 # Get or create device data
@@ -502,27 +517,71 @@ class MemoryManager:
             print(f"❌ Error saving conversation to DB: {e}")
             import traceback
             traceback.print_exc()
-    
-    # ========== CLIENT COMPATIBILITY (Optional) ==========
-    
+        
+        # ========== CLIENT COMPATIBILITY (Optional) ==========
+        
     async def load_memory_from_client(self, client_data):
         """
         Compatibility: always load from DB, ignore client data
         (If you want to migrate client data to DB, implement logic here)
         """
         return await self.load_memory()
-    
+        
     async def save_memory_for_client(self):
         """Prepare memory data to send to client (read-only)"""
         return await self.load_memory()
-    
 
-# Helper function to load conversation history from database
+
+async def link_chat_to_device(device_code: str, chat_id: str) -> bool:
+    """
+    Busca un dispositivo por su 'device_code' y le asigna un 'telegram_chat_id'.
+    Esto reemplaza a DeviceConnectionManager.connect_device()
+    """
+    async with async_session() as session:
+        # 1. Busca el DeviceData usando el CÓDIGO
+        stmt = select(DeviceData).where(DeviceData.device_code == device_code)
+        result = await session.execute(stmt)
+        device_data = result.scalar_one_or_none()
+
+        if device_data:
+            # 2. Si se encuentra, actualiza el telegram_chat_id y guarda
+            device_data.telegram_chat_id = str(chat_id)  # Asegura que sea string
+            await session.commit()
+            print(f"🔗 Dispositivo {device_data.device_id} vinculado a chat {chat_id}")
+            return True
+        
+        print(f"⚠️ No se encontró dispositivo con código {device_code} para vincular.")
+        return False
+
+
+async def get_chat_id_from_device_db(device_id: str) -> str | None:
+    """
+    Obtiene el telegram_chat_id para un device_id.
+    Reemplaza a DeviceConnectionManager.get_chat_id_for_device()
+    """
+    async with async_session() as session:
+        stmt = select(DeviceData.telegram_chat_id).where(DeviceData.device_id == device_id)
+        result = await session.execute(stmt)
+        chat_id = result.scalar_one_or_none()
+        return chat_id
+
+
+async def get_device_from_chat_db(chat_id: str) -> str | None:
+    """
+    Obtiene el device_id para un telegram_chat_id.
+    Reemplaza a DeviceConnectionManager.get_device_for_chat()
+    """
+    async with async_session() as session:
+        stmt = select(DeviceData.device_id).where(DeviceData.telegram_chat_id == str(chat_id))
+        result = await session.execute(stmt)
+        device_id = result.scalar_one_or_none()
+        return device_id
+
+
+    # Helper function to load conversation history from database
 async def load_conversation_from_db(device_id: str) -> list:
     """Helper function to load conversation history from database"""
     try:
-        from backend.database import async_session, DeviceData
-        from sqlalchemy import select
         async with async_session() as session:
             stmt = select(DeviceData).where(DeviceData.device_id == device_id)
             result = await session.execute(stmt)
@@ -536,84 +595,22 @@ async def load_conversation_from_db(device_id: str) -> list:
 
 
 # Tracks which device is connected to which Telegram chat for message delivery
-class DeviceConnectionManager:
-    def __init__(self):
-        self.connections_file = "device_connections.json"
-        self.connections = {}
-    
-    # Load device connections from persistent storage
-    async def load_connections(self):
-        """Cargar conexiones desde archivo"""
-        try:
-            if os.path.exists(self.connections_file):
-                async with aiofiles.open(self.connections_file, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-                    self.connections = json.loads(content)
-                    print(f"📂 Cargadas {len(self.connections)} conexiones de dispositivos")
-            else:
-                self.connections = {}
-                print("📂 No hay conexiones previas de dispositivos")
-        except Exception as e:
-            print(f"Error cargando conexiones: {e}")
-            self.connections = {}
-    
-    # Save device connections to persistent storage
-    async def save_connections(self):
-        """Guardar conexiones en archivo"""
-        try:
-            async with aiofiles.open(self.connections_file, 'w', encoding='utf-8') as f:
-                await f.write(json.dumps(self.connections, indent=2))
-        except Exception as e:
-            print(f"Error guardando conexiones: {e}")
-    
-    # Register device connection to specific Telegram chat
-    async def connect_device(self, device_id, device_code, chat_id):
-        """Conectar un dispositivo a un chat de Telegram"""
-        self.connections[device_id] = {
-            "chat_id": chat_id,
-            "device_code": device_code,
-            "connected_at": datetime.now().isoformat()
-        }
-        await self.save_connections()
-        print(f"🔗 Dispositivo {device_id} conectado a chat {chat_id}")
-    
-    # Remove device connection record
-    async def disconnect_device(self, device_id):
-        """Desconectar un dispositivo"""
-        if device_id in self.connections:
-            del self.connections[device_id]
-            await self.save_connections()
-            print(f"🔗 Dispositivo {device_id} desconectado")
-    
-    # Retrieve Telegram chat ID for a given device
-    async def get_chat_id_for_device(self, device_id):
-        """Obtener chat_id para un dispositivo"""
-        return self.connections.get(device_id, {}).get("chat_id")
-    
-    # Retrieve device ID for a given Telegram chat
-    async def get_device_for_chat(self, chat_id):
-        """Obtener dispositivo para un chat"""
-        for device_id, info in self.connections.items():
-            if info.get("chat_id") == chat_id:
-                return device_id
-        return None
-
-
-# Initialize global device manager instance
-device_manager = DeviceConnectionManager()
-
 # Initialize Telegram bot if token is configured in environment
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 telegram_bot = None
 
 if TELEGRAM_TOKEN:
     telegram_bot = FamilyMessagesBot(TELEGRAM_TOKEN)
-    from backend.telegram_bot import set_device_manager
-    # Inject device manager into telegram bot for cross-module communication
-    set_device_manager(device_manager)
-    print("✅ device_manager inyectado en telegram_bot")
+    # Inject global state into the bot
+    try:
+        from .telegram_bot import set_shared_state
+        set_shared_state(ACTIVE_WEBSOCKETS, PENDING_REQUESTS)
+    except ImportError:
+        from backend.telegram_bot import set_shared_state
+        set_shared_state(ACTIVE_WEBSOCKETS, PENDING_REQUESTS)
+    print("✅ Bot de Telegram initialized with shared state")
 else:
-    print("⚠️ TELEGRAM_BOT_TOKEN no configurado - funcionalidad de mensajes familiares deshabilitada")
+    print("⚠️ TELEGRAM_BOT_TOKEN not configured - family messages functionality disabled")
 
 # Utility function to send updated memory/conversation data to client for local persistence
 async def send_data_update_to_client(websocket, memory_data, conversation_data):
@@ -645,11 +642,10 @@ async def websocket_endpoint(websocket: WebSocket):
     
     print("✅ Nueva conexión WebSocket establecida")
     
-    # Load previously saved device connections from file
-    await device_manager.load_connections()
-    
+    # We don't need to load from file anymore, will use DB
     device_id = None
     device_code = None
+    db_chat_id = None  # Variable to store chat_id from DB
     
     try:
         # Attempt to receive initial handshake data from client
@@ -668,56 +664,78 @@ async def websocket_endpoint(websocket: WebSocket):
         
         # Generate new device code if not provided by client
         if not device_id or not device_code:
-            # Generate unique 6-digit code
-            existing_codes = [info.get("device_code") for info in device_manager.connections.values()]
+            # Check existing codes in database
+            async with async_session() as session:
+                result = await session.execute(select(DeviceData.device_code))
+                existing_codes = [r[0] for r in result if r[0] is not None]
+                
             device_code = generate_unique_device_code(existing_codes)
             device_id = f"device_{device_code}"
-            print(f"🆕 Nuevo dispositivo generado: {device_id} - Código: {device_code}")
+            print(f"🆕 New device generated: {device_id} - Code: {device_code}")
         else:
             # Validate existing device code
-            if device_id in device_manager.connections:
-                # Reconnecting device - verify code matches
-                existing_code = device_manager.connections[device_id].get("device_code")
-                if existing_code != device_code:
-                    print(f"⚠️ Conflicto de código detectado - usando código existente")
-                    device_code = existing_code
-                print(f"🔄 Dispositivo existente reconectado: {device_id} - Código: {device_code}")
+            async with async_session() as session:
+                stmt = select(DeviceData).where(DeviceData.device_id == device_id)
+                result = await session.execute(stmt)
+                device_data = result.scalar_one_or_none()
+                
+                if device_data:
+                    # Reconnecting device - verify code matches
+                    if device_data.device_code != device_code:
+                        print(f"⚠️ Code conflict detected - using existing code")
+                        device_code = device_data.device_code
+                    print(f"🔄 Existing device reconnected: {device_id} - Code: {device_code}")
+                else:
+                    # New device with client-provided ID
+                    print(f"✅ New device registered: {device_id} - Code: {device_code}")
+        
+        # Register or update device in database
+        async with async_session() as session:
+            # 1. Look for the device by ID
+            stmt = select(DeviceData).where(DeviceData.device_id == device_id)
+            result = await session.execute(stmt)
+            device_data = result.scalar_one_or_none()
+
+            if not device_data:
+                # 2. If it doesn't exist, create it with device_id and device_code
+                print(f"🆕 Creating new DB entry for {device_id} with code {device_code}")
+                device_data = DeviceData(
+                    device_id=device_id,
+                    device_code=device_code,
+                    user_memory={},  # Set default values
+                    conversation_history=[]  # Set default values
+                )
+                session.add(device_data)
+            
             else:
-                # New device with client-provided ID
-                print(f"✅ Nuevo dispositivo registrado: {device_id} - Código: {device_code}")
-        
-        # Register or update device in connection manager
-        if device_id not in device_manager.connections:
-            device_manager.connections[device_id] = {
-                "device_code": device_code,
-                "connected_at": datetime.now().isoformat(),
-                "chat_id": None
-            }
-            await device_manager.save_connections()
-            print(f"📱 Dispositivo {device_id} registrado con código {device_code}")
-        else:
-            # Update last connection timestamp for existing device
-            device_manager.connections[device_id]["last_connected"] = datetime.now().isoformat()
-            await device_manager.save_connections()
-        
+                # 3. If it exists, update its device_code if needed
+                if device_data.device_code != device_code:
+                    print(f"� Updating device_code in DB for {device_id}")
+                    device_data.device_code = device_code
+                
+                # Store the chat_id we already had in the DB
+                db_chat_id = device_data.chat_id
+                
+            await session.commit()
+            
+        print(f"📱 Device {device_id} (code {device_code}) ready in DB.")
+
         # Initialize memory manager for this device
         memory_manager = MemoryManager(device_id)
         
-        # Track active WebSocket connections by device (initialize if needed)
-        if not hasattr(device_manager, 'active_websockets'):
-            device_manager.active_websockets = {}
-        device_manager.active_websockets[device_id] = websocket
-        print(f"🔌 WebSocket registrado para dispositivo {device_id}")
+        # Track active WebSocket connections by device
+        ACTIVE_WEBSOCKETS[device_id] = websocket
+        print(f"🔌 WebSocket registered for device {device_id}")
         
         # Send device information immediately to client for identification
         await websocket.send_text(json.dumps({
             "type": "device_info",
             "device_id": device_id,
             "device_code": device_code,
-            "connected_chat": await device_manager.get_chat_id_for_device(device_id)
+            "connected_chat": db_chat_id  # Use chat_id from DB
         }, ensure_ascii=False))
 
-        print(f"📤 Información del dispositivo enviada - Código disponible: {device_code}")
+        print(f"📤 Device information sent - Code available: {device_code}")
         
         # Send initial welcome greeting based on current time of day
         try:
@@ -758,6 +776,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 if not raw:
                     continue
 
+                # ===============================================================
+                # INICIO: Bloque try/except para JSON (Keepalive/Respuestas)
+                # (Esto ya lo tenías bien, es para confirmar)
+                # ===============================================================
                 try:
                     # Attempt to parse message as JSON
                     maybe = json.loads(raw)
@@ -774,7 +796,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 approved, 
                                 websocket
                             )
-                        continue
+                        continue # Salta al siguiente ciclo del bucle
                     
                     # Handle keepalive ping-pong to maintain connection
                     if isinstance(maybe, dict) and maybe.get("type") == "keepalive":
@@ -787,10 +809,14 @@ async def websocket_endpoint(websocket: WebSocket):
                             except:
                                 pass
                         print(f"📶 Keepalive recibido: {maybe.get('ts')}")
-                        continue
+                        continue # Salta al siguiente ciclo del bucle
+                        
                 except Exception:
                     # If not JSON, treat as plain text user message
                     pass
+                # ===============================================================
+                # FIN: Bloque try/except para JSON
+                # ===============================================================
 
                 user_message = raw
                 # Skip if message is empty after parsing
@@ -849,12 +875,15 @@ async def websocket_endpoint(websocket: WebSocket):
                             
                             try:
                                 # Query Gemini for brief acknowledgement
-                                model = genai.GenerativeModel(GEMINI_MODEL)
-                                generation_config = genai.types.GenerationConfig(
-                                    max_output_tokens=1000,
-                                    temperature=0.3
-                                )
-                                response = model.generate_content(prompt, generation_config=generation_config)
+                                if GEMINI_CLIENT:
+                                    generation_config = genai.types.GenerationConfig(
+                                        max_output_tokens=1000,
+                                        temperature=0.3
+                                    )
+                                    # Usa el cliente global
+                                    response = GEMINI_CLIENT.generate_content(prompt, generation_config=generation_config)
+                                else:
+                                    raise Exception("GEMINI_CLIENT no está configurado")
                                 ai_response = response.text.strip()
                             except Exception as e:
                                 print("Error generando respuesta breve:", e)
@@ -866,7 +895,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "type": "message",
                                 "text": ai_response,
                                 "has_family_messages": True,
-                                "messages": messages[:100]  # Limit to first 100 to prevent oversized payload
+                                "messages": messages[:100]  # Limit to first 100
                             }, ensure_ascii=False))
                             
                             print(f"✅ Enviados {len(messages)} mensajes {message_type} para lectura")
@@ -885,7 +914,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "text": ai_response
                             }, ensure_ascii=False))
                         
-                        continue
+                        continue # Importante: salta al siguiente ciclo
                         
                     except Exception as e:
                         print(f"❌ Error leyendo mensajes familiares: {e}")
@@ -896,7 +925,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             await websocket.send_text(json.dumps({"type": "message", "text": ai_response}, ensure_ascii=False))
                         except:
                             pass
-                        continue
+                        continue # Importante: salta al siguiente ciclo
 
                 # Retrieve relevant memories for context in AI response
                 relevant_memories = await memory_manager.get_relevant_memories(user_message)
@@ -905,52 +934,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 if relevant_memories:
                     memory_context = "\n".join([f"- {mem['content']}" for mem in relevant_memories])
                         
-                # Build main AI prompt with user message and context
-                full_prompt = f"""
-Eres "Compa", un compañero conversacional afectuoso.
-
-{f"RECUERDOS PREVIOS DEL USUARIO (usa estos en tu respuesta):\n{memory_context}" if memory_context else "No tengo recuerdos específicos sobre este tema."}
-
-Usuario: "{user_message}"
-
-Instrucciones:
-- Responde de manera natural y afectuosa
-- Si hay recuerdos previos, menciónalos sutilmente
-- 1-2 frases máximo, tono cálido
-- Haz preguntas abiertas cuando sea apropiado
-
-Respuesta:
-"""
-
-                # Import regex at top if not already imported
-                import re
-
-                # Memory patterns compiled once for better performance
-                memory_patterns = [
-                    r'\b(me\s+)?acuerdo\b',           # "acuerdo" o "me acuerdo"
-                    r'\brecuerdo\b',                   # "recuerdo"
-                    r'\bmi\s+(hijo|hija|esposo|esposa|mamá|papá|familia|nieto|nieta)\b',
-                    r'\bcuando\s+(era|vivía|trabajaba)\b',
-                    r'\b(extraño|añoro|nostalgia)\b',
-                    r'\b(me\s+gustaba|disfrutaba|me\s+encantaba)\b',
-                    r'\b(infancia|juventud|aquellos\s+tiempos)\b',
-                    r'\bqué\s+ilusión\b',
-                ]
-                
-                # Create regex pattern once for all keywords
-                memory_regex = re.compile('|'.join(memory_patterns), re.IGNORECASE)
-                
-                # Check if message contains memory-worthy content
+                # --- INICIO DE LA SOLUCIÓN DE BUG ---
+                # Inicializa las variables ANTES del 'if'.
+                # Esto soluciona el error de Pylance "new_memory is not defined",
+                # asegurando que la variable siempre exista.
                 memory_saved = False
+                new_memory = None 
+                # --- FIN DE LA SOLUCIÓN DE BUG ---
 
-                if memory_regex.search(user_message):
-                    # Automatically save user's memory to persistent storage
+                if memory_regex.search(user_message) and not is_question(user_message):
                     memory_saved = True
                     new_memory = await memory_manager.add_important_memory(user_message, "personal")
-                    print(f"✅ DEBUG: Recuerdo guardado: {new_memory['id']} - '{user_message[:50]}...'")
-                    
-                    # Send explicit confirmation to user
-                    confirmation = f"📝 He guardado este recuerdo especial en tu cofre."
+                    print(f"✅ Recuerdo guardado: {new_memory['id']} - '{user_message[:50]}...'")
+                
+                    confirmation = "📝 He guardado este recuerdo especial en tu cofre."
                     try:
                         await websocket.send_text(json.dumps({
                             "type": "memory_saved",
@@ -958,25 +955,17 @@ Respuesta:
                             "memory_id": new_memory['id']
                         }, ensure_ascii=False))
                     except Exception as e:
-                        print(f"Error enviando confirmación de memoria: {e}")
+                        print(f"Error enviando confirmación: {e}")
                     
-                    # Send updated memory data to client for local sync
                     updated_memory = await memory_manager.load_memory()
                     conversation_history = await load_conversation_from_db(device_id)
-                    await send_data_update_to_client(
-                        websocket, 
-                        updated_memory, 
-                        conversation_history
-                    )
+                    await send_data_update_to_client(websocket, updated_memory, conversation_history)
 
                 try:
                     # Validate Gemini API is configured
-                    if not GEMINI_TOKEN:
-                        ai_response = "Error: GEMINI_TOKEN no configurado."
+                    if not GEMINI_CLIENT:
+                        ai_response = "Error: El asistente de IA no está configurado."
                     else:
-                        # Initialize Gemini model
-                        model = genai.GenerativeModel(GEMINI_MODEL)
-
                         # Configure generation parameters for consistency
                         generation_config = genai.types.GenerationConfig(
                             max_output_tokens=250,
@@ -987,67 +976,52 @@ Respuesta:
                         is_memory_question = any(keyword in user_message.lower() for keyword in 
                                                  ["recuerdo", "recuerdos", "acuerdo", "memoria", "pasado", "cuando", "antes"])
 
-                        # Customize prompt based on whether this is a memory-related question
+                        # Customize prompt...
                         if is_memory_question and memory_context:
-                            # Specific prompt for memory recall questions with relevant context
                             full_prompt = f"""
 Eres "Compa", un asistente especializado en Alzheimer. Responde con frases cortas y tono afectuoso.
-
 INFORMACIÓN CRÍTICA - ESTOS SON LOS RECUERDOS REALES DEL USUARIO:
 {memory_context}
-
 El usuario te pregunta: "{user_message}"
-
 RESPONDE mencionando específicamente los recuerdos de arriba. Si no encajan perfectamente, adapta tu respuesta afectivamente.
-
 Tu respuesta (1-2 frases, mencionando los recuerdos):
 """
                         elif is_memory_question and not memory_context:
-                            # Empathetic prompt for memory questions without context
                             full_prompt = f"""
 Eres "Compa", un asistente especializado en Alzheimer.
-
 El usuario pregunta: "{user_message}"
-
 No tengo recuerdos específicos guardados sobre este tema. Responde con empatía.
-
 Tu respuesta (1-2 frases, ofreciendo ayuda):
 """
                         else:
-                            # General conversation prompt
                             full_prompt = f"""
 Eres "Compa", un asistente especializado en Alzheimer.
-
 {f"CONTEXTO DEL USUARIO: {memory_context}" if memory_context else ""}
-
 Usuario: {user_message}
-
 Tu respuesta (1-2 frases, tono afectuoso):
 """
 
                         print(f"DEBUG: Prompt enviado: {full_prompt}")
 
-                        # Call Gemini API to generate response
-                        response = model.generate_content(full_prompt)
+                        # Call Gemini API to generate response (using global client)
+                        response = GEMINI_CLIENT.generate_content(full_prompt)
                         ai_response = response.text.strip()
 
                         print(f"DEBUG: Respuesta cruda: {ai_response}")
 
                         # Verify response mentions memories if relevant memories exist
                         if is_memory_question and memory_context:
-                            # Check if response actually uses the memories provided
                             response_uses_memories = any(
                                 any(word in mem["content"].lower() for word in ai_response.lower().split()[:100])
                                 for mem in relevant_memories
                             )
 
-                            # Force memory mention if AI didn't naturally include them
                             if not response_uses_memories:
                                 print("DEBUG: Forzando mención de recuerdos...")
                                 memory_summary = ". ".join([mem["content"] for mem in relevant_memories[:2]])
                                 ai_response = f"Recuerdo que me contaste: {memory_summary}. ¡Son momentos muy especiales!"
 
-                        # Limit response to maximum 2 sentences to maintain brevity
+                        # Limit response to maximum 2 sentences
                         sentences = [s.strip() for s in ai_response.split('.') if s.strip()]
                         if len(sentences) > 2:
                             ai_response = '. '.join(sentences[:2]) + '.'
@@ -1079,8 +1053,9 @@ Tu respuesta (1-2 frases, tono afectuoso):
                     
                     # Load updated conversation history from DB
                     try:
-                        from backend.database import async_session, DeviceData
-                        from sqlalchemy import select
+                        # Mueve estas importaciones al inicio del archivo
+                        # from backend.database import async_session, DeviceData
+                        # from sqlalchemy import select
                         
                         async with async_session() as session:
                             stmt = select(DeviceData).where(DeviceData.device_id == device_id)
@@ -1107,23 +1082,24 @@ Tu respuesta (1-2 frases, tono afectuoso):
                 except Exception as e:
                     print("Error enviando respuesta por websocket:", e)
 
-            except asyncio.TimeoutError:
-                # Send periodic ping to detect stale connections
+            except asyncio.TimeoutError as e:
+                # Send periodic ping to detect stale connections and log the timeout
+                print("asyncio.TimeoutError while waiting for client message:", e)
                 try:
                     await websocket.send_text(json.dumps({"type":"ping","ts":datetime.now().timestamp()}, ensure_ascii=False))
-                except:
-                    pass
-                continue
+                except Exception as send_err:
+                    print("Error sending ping to client:", send_err)
+                continue # Continúa el bucle while
 
     except WebSocketDisconnect as ws_exc:
         # Client disconnected from WebSocket
         code = getattr(ws_exc, 'code', None)
-        print(f"🔌 Cliente desconectado. WebSocketDisconnect code={code}")
+        print(f"🔌 Client disconnected. WebSocketDisconnect code={code}")
         # Clean up WebSocket connection from active connections tracking
-        if hasattr(device_manager, 'active_websockets') and device_id:
-            if device_id in device_manager.active_websockets:
-                del device_manager.active_websockets[device_id]
-                print(f"🗑️ WebSocket eliminado para dispositivo {device_id}")
+        if device_id in ACTIVE_WEBSOCKETS:
+            del ACTIVE_WEBSOCKETS[device_id]
+            print(f"🗑️ WebSocket removed for device {device_id}")
+            print(f"🗑️ WebSocket eliminado para dispositivo {device_id}")
     except Exception as e:
         # General error handling for unexpected exceptions
         print(f"❌ Error en WebSocket: {e}")
@@ -1160,16 +1136,40 @@ async def search_web(query: str):
 # Retrieve all important memories for a device (the "memory chest")
 @app.get("/memory/cofre")
 async def get_memory_cofre(device_id: str):
-    """Returns all important memories for a specific device"""
+    """Returns all important memories for a specific device from database"""
     if not device_id:
         raise HTTPException(status_code=400, detail="device_id requerido")
-    
-    memory_manager = MemoryManager(device_id)
-    memory = await memory_manager.load_memory()
-    return {
-        "important_memories": memory["important_memories"],
-        "total_memories": len(memory["important_memories"])
-    }
+    try:
+        from backend.database import async_session, Memory
+        from sqlalchemy import select
+        async with async_session() as session:
+            # Consultar todas las memorias del dispositivo
+            stmt = select(Memory).where(
+                Memory.device_id == device_id
+            ).order_by(Memory.timestamp.desc())  # Más recientes primero
+            result = await session.execute(stmt)
+            memories = result.scalars().all()
+            # Convertir a formato JSON
+            memories_list = [
+                {
+                    "id": mem.id,
+                    "content": mem.content,
+                    "category": mem.category,
+                    "timestamp": mem.timestamp.isoformat(),
+                    "last_recalled": mem.last_recalled.isoformat() if mem.last_recalled else None
+                }
+                for mem in memories
+            ]
+            print(f"📦 Cofre de recuerdos: {len(memories_list)} recuerdos para {device_id}")
+            return {
+                "important_memories": memories_list,
+                "total_memories": len(memories_list)
+            }
+    except Exception as e:
+        print(f"❌ Error en /memory/cofre: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error al cargar recuerdos: {str(e)}")
 
 # Add new memory entry manually via HTTP
 @app.post("/memory/cofre")
@@ -1258,7 +1258,7 @@ async def get_family_messages(device_id: str = Query(...)):
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     
     try:
-        chat_id = await device_manager.get_chat_id_for_device(device_id)
+        chat_id = await get_chat_id_from_device_db(device_id)
         
         all_messages = await telegram_bot.load_messages()
         
@@ -1293,7 +1293,7 @@ async def get_all_family_messages(device_id: str = Query(...)):
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     
     try:
-        chat_id = await device_manager.get_chat_id_for_device(device_id)
+        chat_id = await get_chat_id_from_device_db(device_id)
         all_messages = await telegram_bot.load_messages()
         if chat_id:
             device_messages = [msg for msg in all_messages if msg.get("chat_id") == chat_id]
@@ -1316,7 +1316,7 @@ async def get_today_family_messages(device_id: str = Query(...)):
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     
     try:
-        chat_id = await device_manager.get_chat_id_for_device(device_id)
+        chat_id = await get_chat_id_from_device_db(device_id)
         today_messages = await telegram_bot.get_messages_today()
         if chat_id:
             device_messages = [msg for msg in today_messages if msg.get("chat_id") == chat_id]
@@ -1341,7 +1341,7 @@ async def get_messages_by_date(date: str, device_id: str = Query(...)):
     
     try:
         # Obtain chat_id associated with this device
-        chat_id = await device_manager.get_chat_id_for_device(device_id)
+        chat_id = await get_chat_id_from_device_db(device_id)
         date_formatted = date.replace("-", "/")
         all_date_messages = await telegram_bot.get_messages_by_date(date_formatted)
         

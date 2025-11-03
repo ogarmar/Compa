@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, BigInteger
 import os
 from datetime import datetime
 
@@ -30,13 +30,18 @@ class Memory(Base):
 
 
 class DeviceData(Base):
-    """Table to store device-specific data like conversation history"""
+    """Table to store device-specific data including connection info and history"""
     __tablename__ = "device_data"
     
     device_id = Column(String(100), primary_key=True)
-    user_memory = Column(JSON, default=dict)  # Reserved for future use
-    conversation_history = Column(JSON, default=list)
+    device_code = Column(String(6), unique=True, nullable=True)
+    # Cambiado a BigInteger para soportar IDs de chat grandes/negativos
+    telegram_chat_id = Column(BigInteger, unique=True, nullable=True, index=True)
+    # Lambda para crear nuevos objetos por cada instancia
+    user_memory = Column(JSON, default=lambda: {})
+    conversation_history = Column(JSON, default=lambda: [])
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_connected = Column(DateTime, nullable=True)
 
 
 async def init_db():
