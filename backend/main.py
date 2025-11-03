@@ -3,6 +3,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from sqlalchemy import select, or_, func
+from database import async_session, Memory, init_db
 import uvicorn
 import os
 import json
@@ -303,232 +305,176 @@ def generate_unique_device_code(existing_codes):
     return str(int(time.time()))[-6:]
 
 # Manager class for user memory operations (emotion tracking, important memories, preferences)
+
 class MemoryManager:
     def __init__(self, device_id):
         self.device_id = device_id
-        # Unique file names per device
-        self.memory_file = f"user_memory_{device_id}.json"
-        self.conversation_file = f"conversation_history_{device_id}.json"
+        # No longer need local files, everything goes to PostgreSQL
     
-    # Load user memory from client-side provided data
-    async def load_memory_from_client(self, client_data):
-        """Carga memoria desde datos enviados por el cliente"""
-        if client_data:
-            print("✅ Cargando memoria desde datos del cliente")
-            return client_data
-        else:
-            return await self.load_memory() 
+    async def initialize(self):
+        """Initialize the database (call after creating the instance)"""
+        await init_db()
     
-    # Prepare memory data for client-side storage
-    async def save_memory_for_client(self, memory_data):
-        """Prepara datos para que el cliente los guarde localmente"""
-        return memory_data
+    # ========== MEMORY MANAGEMENT ==========
     
-    # Load conversation history from client-provided data
-    async def load_conversation_from_client(self, client_data):
-        """Carga conversación desde datos del cliente"""
-        if client_data:
-            print("✅ Cargando conversación desde datos del cliente")
-            return client_data
-        else:
-            return await self.load_conversation_from_file()
-    
-    # Load conversation history from local file (fallback mechanism)
-    async def load_conversation_from_file(self):
-        """Carga conversación desde archivo (fallback)"""
-        try:
-            if os.path.exists(self.conversation_file):
-                async with aiofiles.open(self.conversation_file, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-                    return json.loads(content)
-            return []
-        except Exception as e:
-            print("Error cargando conversación:", e)
-            return []
-    
-    # Load or initialize user memory structure
     async def load_memory(self):
-        if not os.path.exists(self.memory_file):
-            # Initialize default memory structure if file doesn't exist
-            initial_memory = {
-                "user_preferences": {},
-                "important_memories": [],
-                "family_members": [],
-                "daily_routine": {},
-                "emotional_state": "calm"
-            }
-            await self.save_memory(initial_memory)
-            return initial_memory
-
-        try:
-            # Attempt to read file with UTF-8 encoding
-            async with aiofiles.open(self.memory_file, 'r', encoding='utf-8') as f:
-                content = await f.read()
-                return json.loads(content)
-        except UnicodeDecodeError as ude:
-            # Handle encoding issues with fallback decoding
-            print("Error leyendo memoria (utf-8):", ude)
-            try:
-                async with aiofiles.open(self.memory_file, 'rb') as f:
-                    raw_bytes = await f.read()
-                text, used_enc = _try_decode_bytes(raw_bytes)
-                print(f"Decoded memory file with fallback encoding: {used_enc}. Normalizing to utf-8...")
-                data = json.loads(text)
-                # Rewrite file in UTF-8 for future consistency
-                try:
-                    async with aiofiles.open(self.memory_file, 'w', encoding='utf-8') as f:
-                        await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-                    print("Memoria reescrita en UTF-8 correctamente.")
-                except Exception as e:
-                    print("Error reescribiendo memoria en UTF-8:", e)
-                return data
-            except Exception as e:
-                print("Error leyendo/decodificando memoria con fallback:", e)
-                return {
-                    "user_preferences": {},
-                    "important_memories": [],
-                    "family_members": [],
-                    "daily_routine": {},
-                    "emotional_state": "calm"
-                }
-        except FileNotFoundError:
-            # Initialize new memory if file not found
-            initial_memory = {
-                "user_preferences": {},
-                "important_memories": [],
-                "family_members": [],
-                "daily_routine": {},
-                "emotional_state": "calm"
-            }
-            await self.save_memory(initial_memory)
-            return initial_memory
-        except json.JSONDecodeError as jde:
-            # Handle corrupted JSON with recovery attempt
-            print("JSON corrupto en memory file:", jde)
-            try:
-                async with aiofiles.open(self.memory_file, 'rb') as f:
-                    raw_bytes = await f.read()
-                text, used_enc = _try_decode_bytes(raw_bytes)
-                data = json.loads(text)
-                async with aiofiles.open(self.memory_file, 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-                return data
-            except Exception as e:
-                print("No se pudo reparar memory file:", e)
-                return {
-                    "user_preferences": {},
-                    "important_memories": [],
-                    "family_members": [],
-                    "daily_routine": {},
-                    "emotional_state": "calm"
-                }
-        except Exception as e:
-            print("Error leyendo memoria (general):", e)
+        """Load all user memories from the database"""
+        async with async_session() as session:
+            stmt = select(Memory).where(
+                Memory.device_id == self.device_id
+            ).order_by(Memory.timestamp.desc())
+            
+            result = await session.execute(stmt)
+            memories = result.scalars().all()
+            
             return {
-                "user_preferences": {},
-                "important_memories": [],
-                "family_members": [],
-                "daily_routine": {},
-                "emotional_state": "calm"
+                "device_id": self.device_id,
+                "important_memories": [
+                    {
+                        "id": m.id,
+                        "content": m.content,
+                        "category": m.category,
+                        "timestamp": m.timestamp.isoformat(),
+                        "last_recalled": m.last_recalled.isoformat() if m.last_recalled else None
+                    }
+                    for m in memories
+                ]
             }
     
-    # Save memory to file asynchronously
-    async def save_memory(self, memory_data):
-        try:
-            async with aiofiles.open(self.memory_file, 'w', encoding='utf-8') as f:
-                await f.write(json.dumps(memory_data, indent=2, ensure_ascii=False))
-        except Exception as e:
-            print("Error guardando memoria:", e)
-    
-    # Add new important memory entry with timestamp
     async def add_important_memory(self, memory_text, category="personal"):
-        memory = await self.load_memory()
-        new_memory = {
-            "id": len(memory["important_memories"]) + 1,
-            "content": memory_text,
-            "category": category,
-            "timestamp": datetime.now().isoformat(),
-            "last_recalled": None
-        }
-        memory["important_memories"].append(new_memory)
-        await self.save_memory(memory)
-        return new_memory
-    
-    # Retrieve relevant memories based on query keywords (semantic search-lite)
-    async def get_relevant_memories(self, query, limit=3):
-        memory = await self.load_memory()
-        relevant = []
-        query_words = query.lower().split()
-        
-        # Search through memories for matching keywords
-        for mem in memory["important_memories"]:
-            memory_text = mem["content"].lower()
-            # Check for direct keyword matches (exclude short words)
-            direct_match = any(word in memory_text for word in query_words if len(word) > 3)
+        """Add a new important memory to the database"""
+        async with async_session() as session:
+            new_memory = Memory(
+                device_id=self.device_id,
+                content=memory_text,
+                category=category
+            )
+            session.add(new_memory)
+            await session.commit()
+            await session.refresh(new_memory)
             
-            # Include all memories if query contains memory-related keywords
-            if any(word in query.lower() for word in ["recuerdo", "recuerdos", "acuerdo", "memoria"]):
-                relevant.append(mem)
-            elif direct_match:
-                relevant.append(mem)
-        
-        # Sort by recency and return top results
-        relevant.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        return relevant[:limit]
-    
-    # Save conversation turn (user message + AI response) to file
-    async def save_conversation(self, user_message, assistant_response):
-        try:
-            conversations = []
-            # Load existing conversations
-            if os.path.exists(self.conversation_file):
-                try:
-                    async with aiofiles.open(self.conversation_file, 'r', encoding='utf-8') as f:
-                        conversations = json.loads(await f.read())
-                except UnicodeDecodeError:
-                    # Handle encoding issues
-                    print("Error leyendo conversation_history.json con utf-8; aplicando fallback.")
-                    try:
-                        async with aiofiles.open(self.conversation_file, 'rb') as f:
-                            raw_bytes = await f.read()
-                        text, used_enc = _try_decode_bytes(raw_bytes)
-                        conversations = json.loads(text)
-                        
-                        async with aiofiles.open(self.conversation_file, 'w', encoding='utf-8') as f:
-                            await f.write(json.dumps(conversations, indent=2, ensure_ascii=False))
-                        print("conversation_history.json reescrito en UTF-8.")
-                    except Exception as e:
-                        print("No se pudo reparar conversation_history.json:", e)
-                        conversations = []
-                except json.JSONDecodeError:
-                    print("JSON corrupto en conversation_history.json; se reiniciará.")
-                    conversations = []
-                except Exception as e:
-                    print("Error leyendo conversation file:", e)
-                    conversations = []
-            else:
-                conversations = []
-            
-            # Append new conversation turn
-            conversation_entry = {
-                "timestamp": datetime.now().isoformat(),
-                "user": user_message,
-                "assistant": assistant_response
+            return {
+                "id": new_memory.id,
+                "content": new_memory.content,
+                "category": new_memory.category,
+                "timestamp": new_memory.timestamp.isoformat(),
+                "last_recalled": None
             }
-            conversations.append(conversation_entry)
+    
+    async def get_relevant_memories(self, query, limit=3):
+        """Search for relevant memories based on keywords"""
+        query_words = [w.lower() for w in query.split() if len(w) > 3]
+        
+        async with async_session() as session:
+            stmt = select(Memory).where(
+                Memory.device_id == self.device_id
+            )
             
-            # Maintain rolling window of last 1000 conversations (prevent unbounded growth)
-            if len(conversations) > 1000:
-                conversations = conversations[-1000:]
+            # Basic keyword filter
+            if query_words:
+                conditions = [
+                    func.lower(Memory.content).contains(word) 
+                    for word in query_words
+                ]
+                stmt = stmt.where(or_(*conditions))
             
-            # Write updated conversations to file
-            async with aiofiles.open(self.conversation_file, 'w', encoding='utf-8') as f:
-                await f.write(json.dumps(conversations, indent=2, ensure_ascii=False))
+            stmt = stmt.order_by(Memory.timestamp.desc()).limit(limit)
+            result = await session.execute(stmt)
+            memories = result.scalars().all()
+            
+            # Update last_recalled timestamp
+            for m in memories:
+                m.last_recalled = datetime.utcnow()
+            await session.commit()
+            
+            return [
+                {
+                    "id": m.id,
+                    "content": m.content,
+                    "category": m.category,
+                    "timestamp": m.timestamp.isoformat(),
+                    "last_recalled": m.last_recalled.isoformat() if m.last_recalled else None
+                }
+                for m in memories
+            ]
+    
+    # ========== CONVERSATION MANAGEMENT ==========
+    
+    async def load_conversation(self):
+        """Load conversation history from the database"""
+        async with async_session() as session:
+            stmt = select(DeviceData).where(
+                DeviceData.device_id == self.device_id
+            )
+            result = await session.execute(stmt)
+            device_data = result.scalar_one_or_none()
+            
+            if device_data and device_data.conversation_history:
+                return device_data.conversation_history
+            return []
+    
+    async def save_conversation(self, user_message, assistant_response):
+        """Save a conversation turn to the database"""
+        try:
+            async with async_session() as session:
+                # Find or create DeviceData
+                stmt = select(DeviceData).where(
+                    DeviceData.device_id == self.device_id
+                )
+                result = await session.execute(stmt)
+                device_data = result.scalar_one_or_none()
+                
+                if not device_data:
+                    device_data = DeviceData(
+                        device_id=self.device_id,
+                        conversation_history=[]
+                    )
+                    session.add(device_data)
+                
+                # Add new conversation entry
+                conversation_entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "user": user_message,
+                    "assistant": assistant_response
+                }
+                
+                conversations = device_data.conversation_history or []
+                conversations.append(conversation_entry)
+                
+                # Keep rolling window of last 1000 conversations
+                if len(conversations) > 1000:
+                    conversations = conversations[-1000:]
+                
+                device_data.conversation_history = conversations
+                device_data.last_updated = datetime.utcnow()
+                
+                await session.commit()
+                print(f"✅ Conversation saved to DB for {self.device_id}")
+                
         except Exception as e:
-            print("Error guardando conversación:", e)
+            print(f"❌ Error saving conversation to DB: {e}")
+    
+    # ========== CLIENT COMPATIBILITY (Optional) ==========
+    
+    async def load_memory_from_client(self, client_data):
+        """
+        Compatibility: always load from DB, ignore client data
+        (If you want to migrate client data to DB, implement logic here)
+        """
+        return await self.load_memory()
+    
+    async def save_memory_for_client(self):
+        """Prepare memory data to send to client (read-only)"""
+        return await self.load_memory()
+    
+    async def load_conversation_from_client(self, client_data):
+        """
+        Compatibility: always load from DB
+        (If you want to migrate client data, implement here)
+        """
+        return await self.load_conversation()
 
 
-# Manager class for device-to-Telegram chat connections
 # Tracks which device is connected to which Telegram chat for message delivery
 class DeviceConnectionManager:
     def __init__(self):
@@ -916,25 +862,44 @@ Instrucciones:
 Respuesta:
 """
 
-                # Keywords that trigger automatic memory saving
-                important_keywords = [
-                    "recuerdo cuando", "me acuerdo de", "mi hijo", "mi hija", "mi esposo", "mi esposa", 
-                    "cuando era joven", "mi nieto", "mi nieta", "qué ilusión", "me encantaba",
-                    "mi mamá", "mi papá", "mi familia", "cuando era niño", "cuando era niña", 
-                    "en mi juventud", "aquellos tiempos", "me gustaba", "disfrutaba",
-                    "extraño", "extrañar", "nostalgia", "añoro", "añorar", "tiempo pasado",
-                    "cuando vivía", "cuando trabajaba", "mi infancia", "mi juventud"
+                # Import regex at top if not already imported
+                import re
+
+                # Memory patterns compiled once for better performance
+                memory_patterns = [
+                    r'\b(me\s+)?acuerdo\b',           # "acuerdo" o "me acuerdo"
+                    r'\brecuerdo\b',                   # "recuerdo"
+                    r'\bmi\s+(hijo|hija|esposo|esposa|mamá|papá|familia|nieto|nieta)\b',
+                    r'\bcuando\s+(era|vivía|trabajaba)\b',
+                    r'\b(extraño|añoro|nostalgia)\b',
+                    r'\b(me\s+gustaba|disfrutaba|me\s+encantaba)\b',
+                    r'\b(infancia|juventud|aquellos\s+tiempos)\b',
+                    r'\bqué\s+ilusión\b',
                 ]
+                
+                # Create regex pattern once for all keywords
+                memory_regex = re.compile('|'.join(memory_patterns), re.IGNORECASE)
                 
                 # Check if message contains memory-worthy content
                 memory_saved = False
 
-                if any(keyword in user_message.lower() for keyword in important_keywords):
+                if memory_regex.search(user_message):
                     # Automatically save user's memory to persistent storage
                     memory_saved = True
                     new_memory = await memory_manager.add_important_memory(user_message, "personal")
-                    print(f"DEBUG: Recuerdo guardado: {new_memory['id']}")
-                                    
+                    print(f"✅ DEBUG: Recuerdo guardado: {new_memory['id']} - '{user_message[:50]}...'")
+                    
+                    # Send explicit confirmation to user
+                    confirmation = f"📝 He guardado este recuerdo especial en tu cofre."
+                    try:
+                        await websocket.send_text(json.dumps({
+                            "type": "memory_saved",
+                            "text": confirmation,
+                            "memory_id": new_memory['id']
+                        }, ensure_ascii=False))
+                    except Exception as e:
+                        print(f"Error enviando confirmación de memoria: {e}")
+                    
                     # Send updated memory data to client for local sync
                     updated_memory = await memory_manager.load_memory()
                     conversation_history = await memory_manager.load_conversation_from_file()
@@ -1501,9 +1466,10 @@ async def health_check():
 # Initialize Telegram bot on server startup
 @app.on_event("startup")
 async def startup_event():
-    """Inicia el bot de Telegram al arrancar la app"""
+    """Starts the Telegram bot when the app starts up and loads the database"""
+    await init_db() 
+    
     if telegram_bot:
-        # Schedule Telegram bot to start asynchronously
         asyncio.create_task(telegram_bot.start_bot())
         print("🤖 Bot de Telegram iniciándose...")
 

@@ -284,6 +284,17 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
                 return;
             }
             
+            // Handle memory saved notification from server
+            if (parsed && parsed.type === 'memory_saved') {
+                console.log('💾 Nuevo recuerdo guardado:', parsed);
+                const message = '💾 He guardado un nuevo recuerdo importante en tu cofre.';
+                appendConversation('Compa', message);
+                if (speakEnabled && !isSpeaking) {
+                    speakTextSoft(message);
+                }
+                return;
+            }
+
             // Handle bulk data update from server
             if (parsed && parsed.type === 'data_update') {
                 console.log('📥 Recibida actualización de datos del servidor');
