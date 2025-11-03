@@ -20,8 +20,12 @@ import uuid
 from collections import defaultdict
 
 # Import custom Telegram bot handler (fallback to local import if package not found)
-from telegram_bot import set_device_manager
-from telegram_bot import FamilyMessagesBot
+try:
+    from .telegram_bot import FamilyMessagesBot
+    from .telegram_bot import set_device_manager
+except ImportError:
+    from backend.telegram_bot import FamilyMessagesBot
+    from backend.telegram_bot import set_device_manager
 
 # Dictionary mapping Spanish month names to month numbers for date parsing
 SPANISH_MONTHS = {
@@ -598,7 +602,7 @@ telegram_bot = None
 
 if TELEGRAM_TOKEN:
     telegram_bot = FamilyMessagesBot(TELEGRAM_TOKEN)
-    from telegram_bot import set_device_manager
+    from backend.telegram_bot import set_device_manager
     # Inject device manager into telegram bot for cross-module communication
     set_device_manager(device_manager)
     print("✅ device_manager inyectado en telegram_bot")
