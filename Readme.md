@@ -1,10 +1,13 @@
-# Compa: Your Voice Companion
+# 🧠 Compa - AI Voice Assistant for Alzheimer's Care
 
-Compa is a next-generation conversational AI assistant designed to deliver a personalized and empathetic user experience. Built with modular architecture, Compa seamlessly integrates a generative AI model, memory management, real-time communication, and family messaging features. This project is ideal for research, personal use, and as a foundation for advanced AI companion applications.
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)](https://fastapi.tiangolo.com/)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0.44-orange.svg)](https://www.sqlalchemy.org/)
+[![Google Gemini](https://img.shields.io/badge/AI-Google%20Gemini-blue)](https://ai.google.dev/)
 
-***
+Compa is an innovative AI-powered voice assistant specifically designed to support individuals with Alzheimer's disease and their families. It combines real-time voice interaction, memory management, and family communication features to provide a comprehensive care solution.
 
-## Table of Contents
+## 🌟 Key Features
 
 - [Features](#features)
 - [Architecture Overview](#architecture-overview)
@@ -19,62 +22,49 @@ Compa is a next-generation conversational AI assistant designed to deliver a per
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
-***
+---
 
-## Features
+- **🎙️ Voice-First Interaction**: Natural conversation interface using Web Speech API
+- **🧠 Memory Management**: Intelligent system to store and recall personal memories
+- **👨‍👩‍👧‍👦 Family Connection**: Integrated Telegram bot for family messaging
+- **🤖 AI-Powered Responses**: Context-aware responses using Google Gemini AI
+- **🔄 Real-Time Updates**: WebSocket-based instant communication
+- **🗄️ Database Integration**: Robust PostgreSQL storage with SQLAlchemy ORM
+- **📱 Device Management**: Multi-device support with secure connection codes
 
-- **Personalized Conversations:** Remember past interactions and context for deeper engagement.
-- **Empathetic Generative Responses:** AI-driven replies tailored to the user’s emotional and conversational needs.
-- **Memory Functionality:** Store and recall user memories, preferences, and important events.
-- **Family Messaging:** Retrieve and read family messages from Telegram, helping users stay close to loved ones.
-- **Intuitive User Interface:** Accessible frontend with voice/text support and real-time connection.
+## 🏗️ Technical Architecture
 
-***
-
-## Architecture Overview
-
-Compa is built on a modular architecture, enabling clear separation of responsibilities and easy extensibility. The main components are the FastAPI backend, the generative AI integration, Telegram bot support, user memory management, and a modern front end with voice capabilities.
-
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Frontend                            │
-│┌──────────┐ ┌──────────────┐ ┌───────────────────┐          │
-││  HTML UI │ │ JavaScript   │ │ Web Speech API    │          │
-│└────┬─────┘ └──────┬───────┘ └─────────┬─────────┘          │
-└─────┼──────────────┼────────────────────┼───────────────────┘
-      │       WebSocket Connection        │
-┌─────┼──────────────┼────────────────────┼──────────────────┐
-│     │              ▼                    │                  │
-│ ┌───┴─────────────────────────────┐      │                 │
-│ │       main.py (FastAPI)         │      │                 │
-│ │ ┌─────────────────────────────┐ │      │                 │
-│ │ │  WebSocket Endpoint (/ws)   │ │      │                 │
-│ │ │ - Accept connections        │ │      │                 │
-│ │ │ - Load user memory          │ │      │                 │
-│ │ │ - Route messages            │ │      │                 │
-│ │ └──────────┬──────────────────┘ │      │                 │
-│ └────────────┼────────────────────┘      │                 │
-│              │                           │                 │
-│     ┌────────┼────────────┐              │                 │
-│     ▼        ▼            ▼              ▼                 │
-│ ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐     │
-│ │ Memory  │ │ Telegram │ │ Gemini   │ │ Static Files │     │
-│ │ Manager │ │   Bot    │ │  AI      │ │              │     │
-│ └─────────┘ └──────────┘ └──────────┘ └──────────────┘     │
-│     │          │            │                              │
-│     ▼          ▼            ▼                              │
-│ ┌─────────────────────────────────────┐                    │
-│ │      External Services              │                    │
-│ │ - User Memory Storage (JSON/DB)     │                    │
-│ │ - Telegram API                      │                    │
-│ │ - Google Gemini API                 │                    │
-│ └─────────────────────────────────────┘                    │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A[Frontend - Web UI] -->|WebSocket| B[FastAPI Backend]
+    B --> C[Memory Manager]
+    B --> D[Telegram Bot]
+    B --> E[Google Gemini AI]
+    B --> F[PostgreSQL Database]
+    D -->|Messages| G[Family Members]
+    C -->|Store/Retrieve| F
+    E -->|Generate Responses| B
 ```
 
-***
+## 💻 Tech Stack
+
+### Backend
+
+- **FastAPI**: High-performance async web framework
+- **SQLAlchemy**: SQL toolkit and ORM
+- **PostgreSQL**: Primary database (via asyncpg)
+- **Google Gemini AI**: Advanced language model integration
+- **python-telegram-bot**: Telegram integration
+- **WebSocket**: Real-time communication
+
+### Frontend
+
+- **HTML5**: Modern semantic markup
+- **CSS3**: Responsive design with animations
+- **JavaScript**: Web Speech API integration
+- **WebSocket**: Live updates and communication
+
+---
 
 ## Repository Structure
 
@@ -96,7 +86,7 @@ Compa/
 └── README.md                # Documentation
 ```
 
-***
+---
 
 ## Getting Started
 
@@ -109,29 +99,82 @@ Compa/
 ### Installation Steps
 
 1. **Clone the repository:**
-    ```
-    git clone https://github.com/ogarmar/Compa.git
-    cd Compa
-    ```
+   ```
+   git clone https://github.com/ogarmar/Compa.git
+   cd Compa
+   ```
 2. **Install Python dependencies:**
-    ```
-    pip install -r requirements.txt
-    ```
+   ```
+   pip install -r requirements.txt
+   ```
 3. **Configure environment variables (`.env`):**
-    ```
-    GEMINI_TOKEN=your_gemini_api_key
-    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-    ```
+   ```
+   GEMINI_TOKEN=your_gemini_api_key
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   ```
 4. **Start the backend server:**
-    ```
-    python backend/main.py
-    ```
+   ```
+   python backend/main.py
+   ```
 5. **Open the frontend in your browser:**
-    - Go to `http://localhost:8000` (by default)
+   - Go to `http://localhost:8000` (by default)
 
-***
+---
 
-## Configuration
+## 📱 Device Management
+
+Compa uses a secure device management system with unique 6-digit codes:
+
+- Each device gets a unique identifier
+- Family members connect via Telegram using device codes
+- Database-driven device tracking and validation
+- Real-time connection status monitoring
+
+## 🔐 Security Features
+
+- **Secure WebSocket Connections**: Real-time encrypted communication
+- **Database Authentication**: Protected PostgreSQL connections
+- **Device Validation**: Unique code-based device authentication
+- **Telegram Authorization**: Whitelist-based user access
+- **Environment Variables**: Secure credential management
+
+## 📚 API Documentation
+
+### WebSocket Endpoints
+
+- `/ws`: Main WebSocket connection
+  - Handles real-time communication
+  - Manages device connections
+  - Routes messages and responses
+
+### HTTP Endpoints
+
+- `/`: Serves the main application
+- `/static/*`: Static files (CSS, JavaScript)
+- Additional API documentation available via SwaggerUI at `/docs`
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Google Gemini AI for providing the language model
+- Telegram for the bot API
+- FastAPI community for the excellent framework
+- All contributors and supporters of the project
+
+## 📧 Contact
+
+For support or queries, please open an issue or contact us through our [Telegram group](https://t.me/your_support_group).
+
+---
+
+Made with ❤️ for Alzheimer's patients and their families
 
 Compa uses environment variables for sensitive information. Add the following variables to a `.env` file in your project root:
 
@@ -140,11 +183,12 @@ GEMINI_TOKEN=your_gemini_api_key
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 ```
 
-***
+---
 
 ## Core Components
 
 ### Backend (FastAPI + WebSocket)
+
 - Handles all application logic and connections.
 - Manages WebSocket endpoint `/ws` for real-time communication.
 - Loads and persists user memories.
@@ -152,26 +196,30 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 - Generates responses using the Gemini generative model.
 
 ### Telegram Bot Integration
+
 - Retrieves family messages from Telegram chats.
 - Handles daily and unread message requests.
 - Integrates seamlessly with backend via API calls.
 
 ### Memory Management
+
 - Tracks user conversations, events, important dates, preferences.
 - Stores, loads, queries, and updates memory objects for rich context.
 - Enables personalized, consistent, and context-aware responses.
 
 ### Generative AI Model (Gemini)
+
 - Empathetic response generation.
 - Integrates memory and conversational context.
 - Customizable via prompt engineering.
 
 ### Frontend (HTML/CSS/JavaScript)
+
 - WebSocket client for real-time messaging.
 - Voice input with Web Speech API.
 - Family messages and memory recall UI features.
 
-***
+---
 
 ## Data Flow
 
@@ -187,7 +235,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 4. **Session and memory continuity:**
    - Past interactions influence ongoing conversation.
 
-***
+---
 
 ## Security Considerations
 
@@ -195,7 +243,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 - **API key safety:** Store keys securely and rotate regularly.
 - **WebSocket validation:** (Recommended) Authenticate connections for production.
 
-***
+---
 
 ## Troubleshooting
 
@@ -203,19 +251,19 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 - **Gemini API errors?:** Verify your token, quota, and API service status.
 - **Telegram bot not responding?:** Double-check token, bot status, and internet connectivity.
 
-***
+---
 
 ## Contributing
 
 Contributions are welcome! Feel free to contact oscargarciatrabajos@gmail.com to discuss your ideas, improvements, or issues. Pull requests and issues are also accepted via GitHub.
 
-***
+---
 
 ## License
 
 MIT License
 
-***
+---
 
 ## Acknowledgments
 
@@ -224,6 +272,6 @@ MIT License
 - [Google Gemini](https://ai.google.dev/)
 - All open-source contributors and projects that make Compa possible.
 
-***
+---
 
 Enjoy talking, sharing and building with Compa!
