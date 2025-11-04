@@ -545,7 +545,7 @@ async def link_chat_to_device(device_code: str, chat_id: str) -> bool:
 
         if device_data:
             # 2. Si se encuentra, actualiza el telegram_chat_id y guarda
-            device_data.telegram_chat_id = str(chat_id)  # Asegura que sea string
+            device_data.telegram_chat_id = int(chat_id)  # Asegura que sea string
             await session.commit()
             print(f"🔗 Dispositivo {device_data.device_id} vinculado a chat {chat_id}")
             return True
@@ -572,7 +572,7 @@ async def get_device_from_chat_db(chat_id: str) -> str | None:
     Reemplaza a DeviceConnectionManager.get_device_for_chat()
     """
     async with async_session() as session:
-        stmt = select(DeviceData.device_id).where(DeviceData.telegram_chat_id == str(chat_id))
+        stmt = select(DeviceData.device_id).where(DeviceData.telegram_chat_id == int(chat_id))
         result = await session.execute(stmt)
         device_id = result.scalar_one_or_none()
         return device_id
