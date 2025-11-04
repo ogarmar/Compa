@@ -711,7 +711,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # 3. If it exists, update its device_code if needed
                 if device_data.device_code != device_code:
                     print(f"� Updating device_code in DB for {device_id}")
-                    device_data.device_code = device_code
+                    device_data.device_code = device_data.telegram_chat_id
                 
                 # Store the chat_id we already had in the DB
                 db_chat_id = device_data.chat_id
