@@ -714,8 +714,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     device_data.device_code = device_data.telegram_chat_id
                 
                 # Store the chat_id we already had in the DB
-                db_chat_id = device_data.chat_id
-                
+                db_chat_id = device_data.telegram_chat_id
             await session.commit()
             
         print(f"📱 Device {device_id} (code {device_code}) ready in DB.")
