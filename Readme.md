@@ -1,38 +1,40 @@
-# 🧠 Compa - AI Voice Assistant for Alzheimer's Care
+# 🧠 Compa - Asistente de Voz con IA para el Cuidado del Alzheimer
+
+[English version above](#english) | Versión en Español
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)](https://fastapi.tiangolo.com/)
 [![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0.44-orange.svg)](https://www.sqlalchemy.org/)
 [![Google Gemini](https://img.shields.io/badge/AI-Google%20Gemini-blue)](https://ai.google.dev/)
 
-Compa is an innovative AI-powered voice assistant specifically designed to support individuals with Alzheimer's disease and their families. It combines real-time voice interaction, memory management, and family communication features to provide a comprehensive care solution.
+Compa es un innovador asistente de voz potenciado por IA, específicamente diseñado para apoyar a personas con problemas de memoria (como la enfermedad de Alzheimer) y sus familias. Combina interacción por voz en tiempo real, gestión de memoria y características de comunicación familiar para proporcionar una solución integral de cuidado.
 
-## 🌟 Key Features
+## 🌟 Características Principales
 
-- [Features](#features)
-- [Architecture Overview](#architecture-overview)
-- [Repository Structure](#repository-structure)
-- [Getting Started](#getting-started)
-- [Configuration](#configuration)
-- [Core Components](#core-components)
-- [Data Flow](#data-flow)
-- [Security Considerations](#security-considerations)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgments](#acknowledgments)
+- [Características](#características)
+- [Visión General de la Arquitectura](#visión-general-de-la-arquitectura)
+- [Estructura del Repositorio](#estructura-del-repositorio)
+- [Primeros Pasos](#primeros-pasos)
+- [Configuración](#configuración)
+- [Componentes Principales](#componentes-principales)
+- [Flujo de Datos](#flujo-de-datos)
+- [Consideraciones de Seguridad](#consideraciones-de-seguridad)
+- [Solución de Problemas](#solución-de-problemas)
+- [Contribuir](#contribuir)
+- [Licencia](#licencia)
+- [Agradecimientos](#agradecimientos)
 
 ---
 
-- **🎙️ Voice-First Interaction**: Natural conversation interface using Web Speech API
-- **🧠 Memory Management**: Intelligent system to store and recall personal memories
-- **👨‍👩‍👧‍👦 Family Connection**: Integrated Telegram bot for family messaging
-- **🤖 AI-Powered Responses**: Context-aware responses using Google Gemini AI
-- **🔄 Real-Time Updates**: WebSocket-based instant communication
-- **🗄️ Database Integration**: Robust PostgreSQL storage with SQLAlchemy ORM
-- **📱 Device Management**: Multi-device support with secure connection codes
+- **🎙️ Interacción por Voz**: Interfaz de conversación natural usando Web Speech API
+- **🧠 Gestión de Memoria**: Sistema inteligente para almacenar y recordar memorias personales
+- **👨‍👩‍👧‍👦 Conexión Familiar**: Bot de Telegram integrado para mensajería familiar
+- **🤖 Respuestas con IA**: Respuestas contextuales usando Google Gemini AI
+- **🔄 Actualizaciones en Tiempo Real**: Comunicación instantánea basada en WebSocket
+- **🗄️ Integración con Base de Datos**: Almacenamiento robusto en PostgreSQL con SQLAlchemy ORM
+- **📱 Gestión de Dispositivos**: Soporte multi-dispositivo con códigos de conexión seguros
 
-## 🏗️ Technical Architecture
+## 🏗️ Arquitectura Técnica
 
 ```mermaid
 graph TD
@@ -46,135 +48,143 @@ graph TD
     E -->|Generate Responses| B
 ```
 
-## 💻 Tech Stack
+## 💻 Stack Tecnológico
 
 ### Backend
 
-- **FastAPI**: High-performance async web framework
-- **SQLAlchemy**: SQL toolkit and ORM
-- **PostgreSQL**: Primary database (via asyncpg)
-- **Google Gemini AI**: Advanced language model integration
-- **python-telegram-bot**: Telegram integration
-- **WebSocket**: Real-time communication
+- **FastAPI**: Framework web asíncrono de alto rendimiento
+- **SQLAlchemy**: Kit de herramientas SQL y ORM
+- **PostgreSQL**: Base de datos principal (vía asyncpg)
+- **Google Gemini AI**: Integración de modelo de lenguaje avanzado
+- **python-telegram-bot**: Integración con Telegram
+- **WebSocket**: Comunicación en tiempo real
 
 ### Frontend
 
-- **HTML5**: Modern semantic markup
-- **CSS3**: Responsive design with animations
-- **JavaScript**: Web Speech API integration
-- **WebSocket**: Live updates and communication
+- **HTML5**: Marcado semántico moderno
+- **CSS3**: Diseño responsivo con animaciones
+- **JavaScript**: Integración de Web Speech API
+- **WebSocket**: Actualizaciones en vivo y comunicación
 
 ---
 
-## Repository Structure
+## Estructura del Repositorio
 
 ```
 Compa/
 │
 ├── backend/
-│   ├── main.py              # FastAPI backend and WebSocket
-│   ├── telegram_bot.py      # Telegram bot integration
+│   ├── main.py              # Backend FastAPI y WebSocket
+│   ├── telegram_bot.py      # Integración del bot de Telegram
 │
 ├── frontend/
 │   ├── static/
-│   │   ├── index.html       # Main UI
-│   │   ├── style.css        # Interface stylesheet
-│   │   └── app.js           # WebSocket, UI logic, speech features
+│   │   ├── index.html       # UI Principal
+│   │   ├── style.css        # Hoja de estilos
+│   │   └── app.js           # Lógica WebSocket, UI y funciones de voz
 │
-├── requirements.txt         # Backend Python dependencies
-├── .env                     # Environment configuration (not committed)
-└── README.md                # Documentation
+├── requirements.txt         # Dependencias Python del backend
+├── .env                     # Configuración de entorno (no incluido)
+└── README.md                # Documentación
 ```
 
 ---
 
-## Getting Started
+## Primeros Pasos
 
-### Prerequisites
+### Prerrequisitos
 
 - Python >= 3.11
-- Telegram account to set up the bot
-- API access to Google Gemini (via developer token)
+- Cuenta de Telegram para configurar el bot
+- Acceso a la API de Google Gemini (vía token de desarrollador)
 
-### Installation Steps
+### Pasos de Instalación
 
-1. **Clone the repository:**
+1. **Clonar el repositorio:**
    ```
    git clone https://github.com/ogarmar/Compa.git
    cd Compa
    ```
-2. **Install Python dependencies:**
+2. **Instalar dependencias de Python:**
    ```
    pip install -r requirements.txt
    ```
-3. **Configure environment variables (`.env`):**
+3. **Configurar variables de entorno (`.env`):**
    ```
-   GEMINI_TOKEN=your_gemini_api_key
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   GEMINI_TOKEN=tu_clave_api_gemini
+   TELEGRAM_BOT_TOKEN=tu_token_bot_telegram
    ```
-4. **Start the backend server:**
+4. **Iniciar el servidor backend:**
    ```
    python backend/main.py
    ```
-5. **Open the frontend in your browser:**
-   - Go to `http://localhost:8000` (by default)
+5. **Abrir el frontend en el navegador:**
+
+   - Ir a `http://localhost:8000` (por defecto)
+
+6. **Para enviar mensajes a Compa:**
+   - Buscar este bot en Telegram: @Compa_IA_bot
+   - Enviar el mensaje: /start
+   - Conectar con tu usuario o el de tu familiar usando: /connect (y tu/su número)
 
 ---
 
-## 📱 Device Management
+## 📱 Gestión de Dispositivos
 
-Compa uses a secure device management system with unique 6-digit codes:
+Compa utiliza un sistema seguro de gestión de dispositivos con códigos únicos de 6 dígitos:
 
-- Each device gets a unique identifier
-- Family members connect via Telegram using device codes
-- Database-driven device tracking and validation
-- Real-time connection status monitoring
+- Cada dispositivo recibe un identificador único
+- Los familiares se conectan vía Telegram usando códigos de dispositivo
+- Seguimiento y validación de dispositivos basado en base de datos
+- Monitoreo de estado de conexión en tiempo real
 
-## 🔐 Security Features
+## 🔐 Características de Seguridad
 
-- **Secure WebSocket Connections**: Real-time encrypted communication
-- **Database Authentication**: Protected PostgreSQL connections
-- **Device Validation**: Unique code-based device authentication
-- **Telegram Authorization**: Whitelist-based user access
-- **Environment Variables**: Secure credential management
+- **Conexiones WebSocket Seguras**: Comunicación encriptada en tiempo real
+- **Autenticación de Base de Datos**: Conexiones PostgreSQL protegidas
+- **Validación de Dispositivos**: Autenticación basada en códigos únicos
+- **Autorización de Telegram**: Acceso basado en lista blanca
+- **Variables de Entorno**: Gestión segura de credenciales
 
-## 📚 API Documentation
+## 📚 Documentación de la API
 
-### WebSocket Endpoints
+### Endpoints WebSocket
 
-- `/ws`: Main WebSocket connection
-  - Handles real-time communication
-  - Manages device connections
-  - Routes messages and responses
+- `/ws`: Conexión WebSocket principal
+  - Maneja comunicación en tiempo real
+  - Gestiona conexiones de dispositivos
+  - Enruta mensajes y respuestas
 
-### HTTP Endpoints
+### Endpoints HTTP
 
-- `/`: Serves the main application
-- `/static/*`: Static files (CSS, JavaScript)
-- Additional API documentation available via SwaggerUI at `/docs`
+- `/`: Sirve la aplicación principal
+- `/static/*`: Archivos estáticos (CSS, JavaScript)
+- Documentación adicional de la API disponible vía SwaggerUI en `/docs`
 
-## 🤝 Contributing
+## 🤝 Contribuir
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+¡Las contribuciones son bienvenidas! No dudes en enviar un Pull Request. Para cambios importantes, por favor abre primero un issue para discutir lo que te gustaría cambiar.
 
-## 📄 License
+## 📄 Licencia
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
 
-## 🙏 Acknowledgments
+## 🙏 Agradecimientos
 
-- Google Gemini AI for providing the language model
-- Telegram for the bot API
-- FastAPI community for the excellent framework
-- All contributors and supporters of the project
+- Google Gemini AI por proporcionar el modelo de lenguaje
+- Telegram por la API del bot
+- Comunidad FastAPI por el excelente framework
+- Todos los contribuidores y colaboradores del proyecto
 
-## 📧 Contact
+## 📧 Contacto
 
-For support or queries, please open an issue or contact us through our [Telegram group](https://t.me/your_support_group).
+Para soporte o consultas, por favor abre un issue o contáctame a través de [email](oscargarciatrabajos@gmail.com).
 
 ---
 
-Made with ❤️ for Alzheimer's patients and their families
+Hecho con ❤️ para personas con problemas de memoria y sus familias
+
+¡Disfruta conversando, compartiendo y construyendo con Compa!
 
 Compa uses environment variables for sensitive information. Add the following variables to a `.env` file in your project root:
 
