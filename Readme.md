@@ -11,8 +11,8 @@ Compa is an innovative AI-powered voice assistant specifically designed to suppo
 
 ## 🌟 Key Features
 
-- [Features](#features)
-- [Architecture Overview](#architecture-overview)
+- [Features](#key-features)
+- [Architecture Overview](#technical-architecture)
 - [Repository Structure](#repository-structure)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
@@ -206,8 +206,8 @@ Compa es un innovador asistente de voz potenciado por IA, específicamente dise�
 
 ## 🌟 Características Principales
 
-- [Características](#características)
-- [Visión General de la Arquitectura](#visión-general-de-la-arquitectura)
+- [Características](#características-principales)
+- [Visión General de la Arquitectura](#arquitectura-técnica)
 - [Estructura del Repositorio](#estructura-del-repositorio)
 - [Primeros Pasos](#primeros-pasos)
 - [Configuración](#configuración)
