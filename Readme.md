@@ -29,7 +29,7 @@ Compa is an innovative AI-powered voice assistant specifically designed to suppo
 * **📱 Device Management**: Multi-device support with secure connection codes
 
 ## 🏗️ Technical Architecture
-
+```mermaid
 graph TD
     A[Frontend - Web UI] -->|WebSocket| B[FastAPI Backend]
     B --> C[Memory Manager]
@@ -39,7 +39,7 @@ graph TD
     D -->|Messages| G[Family Members]
     C -->|Store/Retrieve| F
     E -->|Generate Responses| B
-
+```
 
 ## 💻 Tech Stack
 
@@ -62,7 +62,7 @@ graph TD
 ---
 
 ## Repository Structure
-
+```
 Compa/
 │
 ├── backend/
@@ -79,7 +79,7 @@ Compa/
 ├── .env                     # Environment configuration (not committed)
 ├── README.md                # Documentation
 └── LICENSE.md               # License
-
+```
 ---
 
 ## Getting Started
@@ -213,7 +213,7 @@ Compa es un innovador asistente de voz potenciado por IA, específicamente dise�
 * **📱 Gestión de Dispositivos**: Soporte multi-dispositivo con códigos de conexión seguros
 
 ## 🏗️ Arquitectura Técnica
-
+```mermaid
 graph TD
     A[Frontend - Web UI] -->|WebSocket| B[FastAPI Backend]
     B --> C[Memory Manager]
@@ -223,7 +223,7 @@ graph TD
     D -->|Messages| G[Family Members]
     C -->|Store/Retrieve| F
     E -->|Generate Responses| B
-
+```
 ## 💻 Stack Tecnológico
 
 ### Backend
@@ -245,7 +245,7 @@ graph TD
 ---
 
 ## Estructura del Repositorio
-
+```
 Compa/
 │
 ├── backend/
@@ -262,7 +262,7 @@ Compa/
 ├── .env                     # Configuración de entorno (no incluido)
 ├── README.md                # Documentación
 └── LICENSE.md               # Licencia
----
+```
 
 ## Primeros Pasos
 
