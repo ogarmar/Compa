@@ -1,6 +1,6 @@
 # 🧠 Compa - AI Voice Assistant for Alzheimer's Care
 
-(it's done for Spanish Speakers, but also works in other languages, [spanish version below](https://www.google.com/search?q=%23spanish-version))
+(it's done for Spanish Speakers, but also works in other languages, [spanish version below](#spanish-version))
 
 ## English Version
 
@@ -8,15 +8,15 @@ Compa is an innovative AI-powered voice assistant specifically designed to suppo
 
 ## 🌟 Key Features
 
-* [Features](https://www.google.com/search?q=%23key-features)
-* [Architecture Overview](https://www.google.com/search?q=%23technical-architecture)
-* [Repository Structure](https://www.google.com/search?q=%23repository-structure)
-* [Getting Started](https://www.google.com/search?q=%23getting-started)
-* [Core Components](https://www.google.com/search?q=%23core-components)
-* [Security Considerations](https://www.google.com/search?q=%23security-features)
-* [Contributing](https://www.google.com/search?q=%23contributing)
-* [License](https://www.google.com/search?q=%23license)
-* [Acknowledgments](https://www.google.com/search?q=%23acknowledgments)
+* [Features](#key-features)
+* [Architecture Overview](#technical-architecture)
+* [Repository Structure](#repository-structure)
+* [Getting Started](#getting-started)
+* [Core Components](#core-components)
+* [Security Considerations](#ecurity-features)
+* [Contributing](#contributing)
+* [License](#license)
+* [Acknowledgments](#acknowledgments)
 
 ---
 
@@ -187,20 +187,20 @@ Enjoy talking, sharing and building with Compa!
 
 # 🧠 Compa - Asistente de Voz con IA para el Cuidado del Alzheimer
 
-[English version above](https://www.google.com/search?q=%23english-version) | Versión en Español
+[English version above](#english-version) | Versión en Español
 
 Compa es un innovador asistente de voz potenciado por IA, específicamente diseñado para apoyar a personas con problemas de memoria (como la enfermedad de Alzheimer) y sus familias. Combina interacción por voz en tiempo real, gestión de memoria y características de comunicación familiar para proporcionar una solución integral de cuidado.
 
 ## 🌟 Características Principales
 
-* [Características](https://www.google.com/search?q=%23caracter%C3%ADsticas-principales)
-* [Visión General de la Arquitectura](https://www.google.com/search?q=%23arquitectura-t%C3%A9cnica)
-* [Estructura del Repositorio](https://www.google.com/search?q=%23estructura-del-repositorio)
-* [Primeros Pasos](https://www.google.com/search?q=%23primeros-pasos)
-* [Consideraciones de Seguridad](https://www.google.com/search?q=%23caracter%C3%ADsticas-de-seguridad)
-* [Contribuir](https://www.google.com/search?q=%23contribuir)
-* [Licencia](https://www.google.com/search?q=%23licencia)
-* [Agradecimientos](https://www.google.com/search?q=%23agradecimientos)
+* [Características](#caracter%C3%ADsticas-principales)
+* [Visión General de la Arquitectura](#arquitectura-t%C3%A9cnica)
+* [Estructura del Repositorio](#estructura-del-repositorio)
+* [Primeros Pasos](#primeros-pasos)
+* [Consideraciones de Seguridad](#caracter%C3%ADsticas-de-seguridad)
+* [Contribuir](#contribuir)
+* [Licencia](#licencia)
+* [Agradecimientos](#agradecimientos)
 
 ---
 
