@@ -268,8 +268,9 @@
                 
                 if (response.ok && data.verified) {
                     // Guardar token en cookie/localStorage
-                    localStorage.setItem('session_token', data.session_token);
-                    localStorage.setItem('phone_number', currentPhone);
+                    const expires = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000); // 100 años
+                    document.cookie = `session_token=${data.session_token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+                    document.cookie = `phone_number=${currentPhone}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
                     
                     // Redirigir a la app principal
                     window.location.href = '/';
