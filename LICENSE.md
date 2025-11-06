@@ -1,6 +1,6 @@
 # "Compa" Software Custom License / Licencia Personalizada del Software "Compa"
 
-**Copyright (c) 2024 Oscar Garcia (ogarmar)**
+**Copyright (c) 2025 Oscar Garcia (ogarmar)**
 
 This document contains the license terms in English, followed by the official Spanish version.
 *Este documento contiene los términos de la licencia en inglés, seguidos por la versión oficial en español.*
@@ -34,7 +34,7 @@ The exercise of the rights granted in Section 2 is subject to the following cond
 
 a.  **Prohibition of Commercial Use**: Commercial Use of the Software, in whole or in part, or of any derivative work thereof, is strictly prohibited. The Author reserves all commercial rights. Any Commercial Use requires a separate, explicit, written license agreement negotiated directly with the Author.
 
-b.  **Attribution**: Any copy or distribution of the Software, whether modified or not, must include a copy of this license file (`LICENSE.md`) and the original copyright notice: "Copyright (c) 2024 Oscar Garcia (ogarmar)".
+b.  **Attribution**: Any copy or distribution of the Software, whether modified or not, must include a copy of this license file (`LICENSE.md`) and the original copyright notice: "Copyright (c) 2025 Oscar Garcia (ogarmar)".
 
 c.  **Notification of Modification**: If the Licensee modifies the Software and distributes it or makes it available to the public, the Licensee must make a reasonable effort to notify the Author (via email at `oscargarciatrabajos@gmail.com` or by opening an "Issue" in the repository) about the modifications or improvements made. This notification is for informational and collaborative purposes and does not transfer ownership of said modifications to the Author, unless otherwise agreed.
 
@@ -76,7 +76,7 @@ El ejercicio de los derechos otorgados en la Sección 2 está sujeto a las sigui
 
 a.  **Prohibición de Uso Comercial**: Queda estrictamente prohibido el Uso Comercial del Software, en su totalidad o en parte, o de cualquier trabajo derivado del mismo. El Autor se reserva todos los derechos comerciales. Cualquier Uso Comercial requiere un acuerdo de licencia por escrito, separado y explícito, negociado directamente con el Autor.
 
-b.  **Atribución**: Cualquier copia o distribución del Software, ya sea modificado o no, debe incluir una copia de este archivo de licencia (`LICENSE.md`) y el aviso de copyright original: "Copyright (c) 2024 Oscar Garcia (ogarmar)".
+b.  **Atribución**: Cualquier copia o distribución del Software, ya sea modificado o no, debe incluir una copia de este archivo de licencia (`LICENSE.md`) y el aviso de copyright original: "Copyright (c) 2025 Oscar Garcia (ogarmar)".
 
 c.  **Notificación de Modificación**: Si el Licenciatario modifica el Software y lo distribuye o lo pone a disposición del público, el Licenciatario debe hacer un esfuerzo razonable para notificar al Autor (a través del correo electrónico `oscargarciatrabajos@gmail.com` o abriendo un "Issue" en el repositorio) sobre las modificaciones o mejoras realizadas. Esta notificación tiene fines informativos y de colaboración, y no transfiere la propiedad de dichas modificaciones al Autor, a menos que se acuerde lo contrario.
 
