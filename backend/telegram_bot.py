@@ -5,6 +5,9 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import aiofiles
+import traceback
+
+from backend.device_utils import link_chat_to_device, get_device_from_chat_db
 
 # File paths for persistent data storage
 FAMILY_MESSAGES_FILE = "family_messages.json"
@@ -249,9 +252,7 @@ El mensaje llegará directamente al dispositivo conectado."""
     
     async def handle_connect_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /connect command - initiate device connection request requiring device approval"""
-        # Import locally to avoid circular imports
-        from backend.main import link_chat_to_device, get_device_from_chat_db
-        
+        # Import locally to avoid circular imports        
         try:
             chat_id = update.effective_chat.id
             user_name = update.effective_user.first_name
@@ -336,7 +337,6 @@ El mensaje llegará directamente al dispositivo conectado."""
             
         except Exception as e:
             print(f"Error en comando connect: {e}")
-            import traceback
             traceback.print_exc()
             await update.message.reply_text("❌ Error en la conexión.")
 
@@ -432,7 +432,6 @@ El mensaje llegará directamente al dispositivo conectado."""
     async def handle_disconnect_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /disconnect command - terminate device connection for this chat"""
         # Import locally to avoid circular imports
-        from backend.main import get_device_from_chat_db
         
         try:
             chat_id = update.effective_chat.id
@@ -462,7 +461,6 @@ El mensaje llegará directamente al dispositivo conectado."""
     async def handle_status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /status command - show current connection status and details"""
         # Import locally to avoid circular imports
-        from backend.main import get_device_from_chat_db
         
         try:
             chat_id = update.effective_chat.id
@@ -493,7 +491,6 @@ El mensaje llegará directamente al dispositivo conectado."""
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages - save and forward to connected device"""
         # Import locally to avoid circular imports
-        from backend.main import get_device_from_chat_db
         
         chat_id = update.effective_chat.id
         user_name = update.effective_user.first_name

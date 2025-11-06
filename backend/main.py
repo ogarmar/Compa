@@ -20,6 +20,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from .database import async_session, Memory, init_db, DeviceData, UserSession, PhoneVerification
+from .device_utils import link_chat_to_device, get_chat_id_from_device_db, get_device_from_chat_db
 from .sms_service import sms_service
 from .telegram_bot import FamilyMessagesBot
 
@@ -531,50 +532,7 @@ class MemoryManager:
         return await self.load_memory()
 
 
-async def link_chat_to_device(device_code: str, chat_id: str) -> bool:
-    """
-    Busca un dispositivo por su 'device_code' y le asigna un 'telegram_chat_id'.
-    Esto reemplaza a DeviceConnectionManager.connect_device()
-    """
-    async with async_session() as session:
-        # 1. Busca el DeviceData usando el CÓDIGO
-        stmt = select(DeviceData).where(DeviceData.device_code == device_code)
-        result = await session.execute(stmt)
-        device_data = result.scalar_one_or_none()
 
-        if device_data:
-            # 2. Si se encuentra, actualiza el telegram_chat_id y guarda
-            device_data.telegram_chat_id = int(chat_id)  # Asegura que sea string
-            await session.commit()
-            print(f"🔗 Dispositivo {device_data.device_id} vinculado a chat {chat_id}")
-            return True
-        
-        print(f"⚠️ No se encontró dispositivo con código {device_code} para vincular.")
-        return False
-
-
-async def get_chat_id_from_device_db(device_id: str) -> str | None:
-    """
-    Obtiene el telegram_chat_id para un device_id.
-    Reemplaza a DeviceConnectionManager.get_chat_id_for_device()
-    """
-    async with async_session() as session:
-        stmt = select(DeviceData.telegram_chat_id).where(DeviceData.device_id == device_id)
-        result = await session.execute(stmt)
-        chat_id = result.scalar_one_or_none()
-        return chat_id
-
-
-async def get_device_from_chat_db(chat_id: str) -> str | None:
-    """
-    Obtiene el device_id para un telegram_chat_id.
-    Reemplaza a DeviceConnectionManager.get_device_for_chat()
-    """
-    async with async_session() as session:
-        stmt = select(DeviceData.device_id).where(DeviceData.telegram_chat_id == int(chat_id))
-        result = await session.execute(stmt)
-        device_id = result.scalar_one_or_none()
-        return device_id
 
 
     # Helper function to load conversation history from database
