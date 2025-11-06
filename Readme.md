@@ -193,11 +193,11 @@ Compa es un innovador asistente de voz potenciado por IA, específicamente dise�
 
 ## 🌟 Características Principales
 
-* [Características](#caracter%C3%ADsticas-principales)
-* [Visión General de la Arquitectura](#arquitectura-t%C3%A9cnica)
+* [Características](#características-principales)
+* [Visión General de la Arquitectura](#arquitectura-técnica)
 * [Estructura del Repositorio](#estructura-del-repositorio)
 * [Primeros Pasos](#primeros-pasos)
-* [Consideraciones de Seguridad](#caracter%C3%ADsticas-de-seguridad)
+* [Consideraciones de Seguridad](#características-de-seguridad)
 * [Contribuir](#contribuir)
 * [Licencia](#licencia)
 * [Agradecimientos](#agradecimientos)
