@@ -1,11 +1,10 @@
 from random import random
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import Request, Header, FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select, or_, func, Column, String, JSON, DateTime
 from sqlalchemy.sql import text
-from .database import async_session, Memory, init_db, DeviceData
 import uvicorn
 import os
 import json
@@ -18,12 +17,12 @@ import traceback
 import google.generativeai as genai
 import uuid
 from collections import defaultdict
+from pydantic import BaseModel
 
-# Local imports
-try:
-    from .telegram_bot import FamilyMessagesBot
-except ImportError:
-    from backend.telegram_bot import FamilyMessagesBot
+from .database import async_session, Memory, init_db, DeviceData, UserSession, PhoneVerification
+from .sms_service import sms_service
+from .telegram_bot import FamilyMessagesBot
+
 
 # Telegram bot handler comment moved to imports section
 
@@ -1498,10 +1497,32 @@ if os.path.isdir(frontend_path):
 else:
     print("Warning: frontend_path does not exist.")
 
+
+@app.get("/login")
+async def login_page():
+    """Sirve la página de login"""
+    login_file = os.path.join(frontend_path, 'login.html')
+    if os.path.exists(login_file):
+        return FileResponse(login_file)
+    return {"message": "Login page not found"}
 # Serve index.html as root endpoint
 @app.get("/")
-async def read_root():
-    """Serves the main frontend HTML file"""
+async def read_root(request: Request, session_token: str = Header(None)):
+    """Sirve la aplicación principal (requiere autenticación)"""
+    # Verificar si hay sesión válida
+    if not session_token:
+        # Intentar obtener de cookie
+        session_token = request.cookies.get('session_token')
+    
+    if session_token and sms_service:
+        # Validar sesión
+        session_info = await sms_service.validate_session(session_token)
+        if not session_info.get('valid'):
+            return RedirectResponse(url='/login')
+    elif sms_service:  # Si está configurado SMS pero no hay sesión
+        return RedirectResponse(url='/login')
+    
+    # Sesión válida o SMS no configurado: servir app
     index_file = os.path.join(frontend_path, 'index.html')
     if os.path.exists(index_file):
         return FileResponse(index_file)
@@ -1530,6 +1551,84 @@ async def health_check():
         "telegram_configured": telegram_bot is not None
     }
 
+
+
+
+class PhoneRequest(BaseModel):
+    phone_number: str
+
+class VerifyRequest(BaseModel):
+    phone_number: str
+    code: str
+
+class SessionValidateRequest(BaseModel):
+    session_token: str
+
+@app.post("/auth/send-code")
+async def send_verification_code(request: PhoneRequest):
+    """Envía código de verificación al número de teléfono"""
+    if not sms_service:
+        raise HTTPException(status_code=503, detail="Servicio SMS no configurado")
+    
+    result = await sms_service.send_verification_code(request.phone_number)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return {
+        "message": "Código enviado correctamente",
+        "phone_number": result["phone_number"]
+    }
+
+@app.post("/auth/verify-code")
+async def verify_code(request: VerifyRequest):
+    """Verifica el código SMS y crea sesión"""
+    if not sms_service:
+        raise HTTPException(status_code=503, detail="Servicio SMS no configurado")
+    
+    result = await sms_service.verify_code(request.phone_number, request.code)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return {
+        "verified": True,
+        "session_token": result["session_token"],
+        "session_id": result["session_id"],
+        "message": "Autenticación exitosa"
+    }
+
+@app.post("/auth/validate-session")
+async def validate_session(request: SessionValidateRequest):
+    """Valida si una sesión es válida"""
+    if not sms_service:
+        raise HTTPException(status_code=503, detail="Servicio SMS no configurado")
+    
+    result = await sms_service.validate_session(request.session_token)
+    
+    if not result["valid"]:
+        raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
+    
+    return result
+
+@app.post("/auth/logout")
+async def logout(request: SessionValidateRequest):
+    """Cierra sesión eliminando el token"""
+    try:
+        async with async_session() as session:
+            stmt = select(UserSession).where(
+                UserSession.session_token == request.session_token
+            )
+            result = await session.execute(stmt)
+            user_session = result.scalar_one_or_none()
+            
+            if user_session:
+                await session.delete(user_session)
+                await session.commit()
+        
+        return {"message": "Sesión cerrada correctamente"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
 # LIFECYCLE EVENTS - Startup and Shutdown hooks

@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, BigInteger
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, BigInteger, Boolean
 import os
-from datetime import datetime
-
+from datetime import datetime, timedelta
+import secrets
 # Convert DATABASE_URL for asyncpg if necessary
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgresql://"):
@@ -43,6 +43,31 @@ class DeviceData(Base):
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_connected = Column(DateTime, nullable=True)
 
+class UserSession(Base):
+    """Table for phone authentication sessions"""
+    __tablename__ = "user_sessions"
+    
+    id = Column(String(100), primary_key=True, default=lambda: secrets.token_urlsafe(32))
+    phone_number = Column(String(20), index=True, nullable=False)
+    device_id = Column(String(100), index=True, nullable=True)
+    session_token = Column(String(200), unique=True, nullable=False)
+    verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=30))
+    last_activity = Column(DateTime, default=datetime.utcnow)
+
+
+class PhoneVerification(Base):
+    """Table for phone number verification codes"""
+    __tablename__ = "phone_verifications"
+    
+    id = Column(String(100), primary_key=True)
+    phone_number = Column(String(20), index=True, nullable=False)
+    verification_code = Column(String(6), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(minutes=10))
+    attempts = Column(Integer, default=0)
+    verified = Column(Boolean, default=False)
 
 async def init_db():
     """Create database tables"""

@@ -1257,6 +1257,128 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         hideConnectionRequestModal();
     }
 
+
+    // ============================================
+    // AUTHENTICATION MIDDLEWARE
+    // ============================================
+
+    class AuthManager {
+        constructor() {
+            this.sessionToken = null;
+            this.phoneNumber = null;
+        }
+        
+        // Cargar sesión desde localStorage
+        loadSession() {
+            this.sessionToken = localStorage.getItem('session_token');
+            this.phoneNumber = localStorage.getItem('phone_number');
+            return this.sessionToken !== null;
+        }
+        
+        // Validar sesión con el servidor
+        async validateSession() {
+            if (!this.sessionToken) {
+                return false;
+            }
+            
+            try {
+                const response = await fetch('/auth/validate-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        session_token: this.sessionToken
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Sesión válida:', data);
+                    return true;
+                } else {
+                    // Sesión inválida o expirada
+                    this.clearSession();
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Error validando sesión:', error);
+                return false;
+            }
+        }
+        
+        // Limpiar sesión y redirigir a login
+        clearSession() {
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('phone_number');
+            this.sessionToken = null;
+            this.phoneNumber = null;
+        }
+        
+        // Cerrar sesión
+        async logout() {
+            if (!this.sessionToken) return;
+            
+            try {
+                await fetch('/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        session_token: this.sessionToken
+                    })
+                });
+            } catch (error) {
+                console.error('Error cerrando sesión:', error);
+            }
+            
+            this.clearSession();
+            window.location.href = '/login';
+        }
+        
+        // Obtener información de sesión
+        getSessionInfo() {
+            return {
+                token: this.sessionToken,
+                phone: this.phoneNumber
+            };
+        }
+    }
+
+    // Instancia global
+    const authManager = new AuthManager();
+
+    // Verificar autenticación antes de iniciar la app
+    async function checkAuthBeforeBoot() {
+        // Si estamos en la página de login, no validar
+        if (window.location.pathname === '/login' || window.location.pathname === '/login.html') {
+            return true;
+        }
+        
+        // Cargar sesión de localStorage
+        const hasSession = authManager.loadSession();
+        
+        if (!hasSession) {
+            console.log('⚠️ No hay sesión activa, redirigiendo a login');
+            window.location.href = '/login';
+            return false;
+        }
+        
+        // Validar sesión con el servidor
+        const isValid = await authManager.validateSession();
+        
+        if (!isValid) {
+            console.log('⚠️ Sesión expirada, redirigiendo a login');
+            window.location.href = '/login';
+            return false;
+        }
+        
+        console.log('✅ Sesión válida, iniciando app');
+        return true;
+    }
+
+
     // ============================================
     // APPLICATION BOOT - Initialization and startup
     // ============================================
@@ -1434,9 +1556,19 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
     // STARTUP - Execute boot function when the DOM is ready
     // ============================================
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', boot);
-    } else {
-      boot();
-    }
+    document.addEventListener('DOMContentLoaded', async () => {
+        const authenticated = await checkAuthBeforeBoot();
+        if (authenticated) boot();
+    });
+} else {
+    (async () => {
+        const authenticated = await checkAuthBeforeBoot();
+        if (authenticated) boot();
+    })();
+}
+
+// Exponer en API global
+window.__Acompania = window.__Acompania || {};
+window.__Acompania.authManager = authManager;
   })(); 
 } 
