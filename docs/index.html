@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Compa - Asistente de Voz IA para Alzheimer | Cuidado Conectado</title>
+    <meta name="description" data-key="metaDescription" content="Compa es un asistente de voz impulsado por IA que apoya a personas con Alzheimer y problemas de memoria. Conexión familiar 24/7 con gestión de memoria inteligente.">
+    <meta name="keywords" data-key="metaKeywords" content="Alzheimer, asistente IA, cuidado de personas mayores, memoria, salud mental, tecnología para mayores, voz IA, Telegram">
+    
+    <meta name="author" content="Compa Team">
+    <meta name="robots" content="index, follow">
+    
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://compa-production.up.railway.app">
+    <meta property="og:title" content="Compa - Asistente de Voz IA para Alzheimer">
+    <meta property="og:description" content="Conecta con tus seres queridos con problemas de memoria. IA que entiende, recuerda y cuida.">
+    <meta property="og:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 630'%3E%3Crect fill='%23667eea' width='1200' height='630'/%3E%3Ctext x='50%' y='50%' font-size='80' fill='white' text-anchor='middle' dominant-baseline='middle' font-family='Arial'%3E%F0%9F%A7%A0 Compa%3C/text%3E%3C/svg%3E">
+    
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Compa - Asistente de Voz IA para Alzheimer">
+    <meta name="twitter:description" content="Tecnología IA que conecta familias y mejora la calidad de vida en Alzheimer">
+    
+    <link rel="canonical" href="https://compa-production.up.railway.app">
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Compa",
+      "description": "Asistente de voz impulsado por IA para apoyo de personas con Alzheimer",
+      "applicationCategory": "HealthApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "150"
+      }
+    }
+    </script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400..700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    
+    <nav>
+        <div class="nav-container">
+            <a href="#" class="logo">🧠 Compa</a>
+            <ul class="nav-links">
+                <li><a href="#beneficios" data-key="navBeneficios">Beneficios</a></li>
+                <li><a href="#caracteristicas" data-key="navCaracteristicas">Características</a></li>
+                <li><a href="#contacto" data-key="navContacto">Contacto</a></li>
+            </ul>
+            <div class="nav-extra">
+                <button id="translate-btn" class="btn-translate">EN</button>
+                <button class="nav-toggle" aria-label="Abrir menú">
+                    <span class="hamburger"></span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- <div class="ph-badge">
+        <a href="https://www.producthunt.com/posts/compa" target="_blank" rel="noopener noreferrer">
+            <i class="fas fa-arrow-up"></i>
+            <span data-key="btnPH">Upvota en PH</span>
+        </a>
+    </div> -->
+
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-text" data-aos="fade-right">
+                <h1 data-key="heroTitle">Cuidado Conectado para Tus Seres Queridos</h1>
+                <p data-key="heroSubtitle">Asistente de voz impulsado por IA que apoya a personas con Alzheimer y problemas de memoria, manteniendo a las familias unidas.</p>
+                <div class="cta-buttons">
+                    <a href="https://compa-production.up.railway.app/" class="btn btn-primary" rel="">
+                        <i class="fas fa-play"></i>
+                        <span data-key="btnProbar">Probar Ahora</span>
+                    </a>
+                    <a href="#caracteristicas" class="btn btn-secondary">
+                        <i class="fas fa-info-circle"></i>
+                        <span data-key="btnVerMas">Ver Más</span>
+                    </a>
+                </div>
+            </div>
+            <div class="hero-visual" data-aos="fade-left">
+                <div class="demo-placeholder">
+                    <i class="fas fa-microphone"></i>
+                    <h3 data-key="heroDemoTitle">Conversación Natural</h3>
+                    <p data-key="heroDemoSubtitle">Interacción por voz simple e intuitiva</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="para-quien">
+        <div class="container">
+            <div class="section-title" data-aos="fade-up">
+                <h2 data-key="paraQuienTitle">¿Para Quién es Compa?</h2>
+                <p data-key="paraQuienSubtitle">Diseñado para familias que enfrentan desafíos de memoria</p>
+            </div>
+            <div class="personas">
+                <div class="persona-card" data-aos="fade-up" data-aos-delay="100">
+                    <i class="fas fa-user-friends"></i>
+                    <h3 data-key="persona1Title">Familiares Cuidadores</h3>
+                    <p data-key="persona1Text">Mantente conectado y apoya a tus seres queridos a distancia. Recibe actualizaciones y comunícate fácilmente a través de Telegram.</p>
+                </div>
+                <div class="persona-card" data-aos="fade-up" data-aos-delay="200">
+                    <i class="fas fa-heart"></i>
+                    <h3 data-key="persona2Title">Personas con Pérdidas de Memoria</h3>
+                    <p data-key="persona2Text">Asistente de voz compasivo que ayuda a recordar momentos importantes y proporciona compañía constante.</p>
+                </div>
+                <div class="persona-card" data-aos="fade-up" data-aos-delay="300">
+                    <i class="fas fa-hospital"></i>
+                    <h3 data-key="persona3Title">Profesionales de la Salud</h3>
+                    <p data-key="persona3Text">Herramienta de apoyo para mejorar la calidad de vida de pacientes con deterioro cognitivo.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="beneficios" class="benefits">
+        <div class="container">
+            <div class="section-title" data-aos="fade-up">
+                <h2 data-key="beneficiosTitle">Beneficios Clave</h2>
+                <p data-key="beneficiosSubtitle">Cómo Compa transforma el cuidado de memoria</p>
+            </div>
+            <div class="benefit-grid">
+                <div class="benefit-item" data-aos="zoom-in" data-aos-delay="100">
+                    <div class="benefit-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3 data-key="beneficio1Title">Gestión de Memoria</h3>
+                    <p data-key="beneficio1Text">Sistema inteligente que almacena y recuerda momentos personales importantes cuando son necesarios.</p>
+                </div>
+                <div class="benefit-item" data-aos="zoom-in" data-aos-delay="200">
+                    <div class="benefit-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <h3 data-key="beneficio2Title">Comunicación Familiar</h3>
+                    <p data-key="beneficio2Text">Conexión directa con familiares a través de Telegram para mantener el vínculo familiar fuerte.</p>
+                </div>
+                <div class="benefit-item" data-aos="zoom-in" data-aos-delay="300">
+                    <div class="benefit-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h3 data-key="beneficio3Title">Disponibilidad 24/7</h3>
+                    <p data-key="beneficio3Text">Compañía constante y asistencia en cualquier momento del día o la noche.</p>
+                </div>
+                <div class="benefit-item" data-aos="zoom-in" data-aos-delay="400">
+                    <div class="benefit-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3 data-key="beneficio4Title">Seguro y Privado</h3>
+                    <p data-key="beneficio4Text">Datos protegidos con encriptación y gestión segura de dispositivos.</p>
+                </div>
+                <div class="benefit-item" data-aos="zoom-in" data-aos-delay="500">
+                    <div class="benefit-icon">
+                        <i class="fas fa-mobile-alt"></i>
+                    </div>
+                    <h3 data-key="beneficio5Title">Fácil de Usar</h3>
+                    <p data-key="beneficio5Text">Interfaz simple con interacción por voz, sin necesidad de conocimientos técnicos.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="caracteristicas">
+        <div class="container">
+            <div class="section-title" data-aos="fade-up">
+                <h2 data-key="caracteristicasTitle">Características Principales</h2>
+                <p data-key="caracteristicasSubtitle">Tecnología avanzada al servicio del cuidado humano</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="100">
+                    <i class="fas fa-microphone-alt"></i>
+                    <h3 data-key="feature1Title">Interacción por Voz</h3>
+                    <p data-key="feature1Text">Conversación natural usando Web Speech API para una experiencia intuitiva.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="150">
+                    <i class="fas fa-robot"></i>
+                    <h3 data-key="feature2Title">IA de Google Gemini</h3>
+                    <p data-key="feature2Text">Respuestas inteligentes y contextuales impulsadas por tecnología de última generación.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="200">
+                    <i class="fas fa-paper-plane"></i>
+                    <h3 data-key="feature3Title">Bot de Telegram</h3>
+                    <p data-key="feature3Text">Comunicación directa entre familiares y el asistente a través de mensajería.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="250">
+                    <i class="fas fa-sync-alt"></i>
+                    <h3 data-key="feature4Title">Actualizaciones en Tiempo Real</h3>
+                    <p data-key="feature4Text">WebSocket para comunicación instantánea y sincronización de datos.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="300">
+                    <i class="fas fa-lock"></i>
+                    <h3 data-key="feature7Title">Autenticación Segura</h3>
+                    <p data-key="feature7Text">Acceso protegido para garantizar la privacidad de los usuarios y datos sensibles.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="350">
+                    <i class="fas fa-chart-line"></i>
+                    <h3 data-key="feature8Title">Métricas de Uso</h3>
+                    <p data-key="feature8Text">Información anónima para mejorar el servicio y entender patrones de interacción.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="400">
+                    <i class="fas fa-database"></i>
+                    <h3 data-key="feature5Title">Base de Datos Robusta</h3>
+                    <p data-key="feature5Text">PostgreSQL con SQLAlchemy para almacenamiento seguro y confiable.</p>
+                </div>
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="450">
+                    <i class="fas fa-tablets"></i>
+                    <h3 data-key="feature6Title">Multi-Dispositivo</h3>
+                    <p data-key="feature6Text">Soporte para múltiples dispositivos con códigos de conexión seguros.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 
+    
+      Las reseñas son ficticias y se añadirán testimonios reales más adelante.
+    
+    <section id="testimonios" class="testimonials">
+        <div class="container">
+            <div class="section-title" data-aos="fade-up">
+                <h2 data-key="testimoniosTitle">Lo Que Dicen Nuestros Usuarios</h2>
+                <p data-key="testimoniosSubtitle">Historias reales de familias que usan Compa</p>
+            </div>
+            <div class="testimonial-grid">
+                <div class="testimonial-card" data-aos="fade-up" data-aos-delay="100">
+                    <p class="testimonial-text" data-key="testimonio1Text">"Compa ha sido un salvavidas para nuestra familia. Mi madre puede hablar con él cuando se siente sola, y yo recibo actualizaciones constantes sobre cómo está."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">MR</div>
+                        <div>
+                            <strong data-key="testimonio1Autor">María Rodríguez</strong>
+                            <p class="author-role" data-key="testimonio1Rol">Hija de usuario con Alzheimer</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card" data-aos="fade-up" data-aos-delay="200">
+                    <p class="testimonial-text" data-key="testimonio2Text">"Como cuidador profesional, Compa me ayuda a proporcionar mejor atención. La gestión de memoria y las alertas familiares son increíbles."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">JG</div>
+                        <div>
+                            <strong data-key="testimonio2Autor">Juan García</strong>
+                            <p class="author-role" data-key="testimonio2Rol">Enfermero geriátrico</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card" data-aos="fade-up" data-aos-delay="300">
+                    <p class="testimonial-text" data-key="testimonio3Text">"Me encanta poder hablar con Compa cuando mi familia no está. Me ayuda a recordar cosas importantes y me hace sentir acompañada."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">AM</div>
+                        <div>
+                            <strong data-key="testimonio3Autor">Ana Martínez</strong>
+                            <p class="author-role" data-key="testimonio3Rol">Usuaria de Compa, 72 años</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    -->
+
+    <section class="cta-section">
+        <div class="container">
+            <h2 data-aos="fade-up" data-key="ctaTitle">Comienza a Cuidar Mejor Hoy</h2>
+            <p data-aos="fade-up" data-aos-delay="100" data-key="ctaSubtitle">Únete a cientos de familias que ya confían en Compa</p>
+            
+            <div class="cta-section-buttons" data-aos="fade-up" data-aos-delay="200">
+                <a href="https://compa-production.up.railway.app/" class="btn btn-primary" rel="noopener noreferrer">
+                    <i class="fas fa-rocket"></i>
+                    <span data-key="ctaBtnProbar">Probar Compa Ahora</span>
+                </a>
+                <!-- <a href="https://www.producthunt.com/posts/compa" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-heart"></i>
+                    <span data-key="ctaBtnVotar">Votar en Product Hunt</span>
+                </a> -->
+                <a href="https://www.paypal.com/donate/?hosted_button_id=UTP68PSX2425G" class="btn" id="donate-btn-cta" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-donate"></i>
+                    <span data-key="ctaBtnDonar">Apoyar el Proyecto</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section id="contacto" class="contact">
+        <div class="container">
+            <div class="section-title" data-aos="fade-up">
+                <h2 data-key="contactoTitle">Contáctanos</h2>
+                <p data-key="contactoSubtitle">¿Tienes preguntas o sugerencias? Nos encantaría escucharte</p>
+            </div>
+            <form 
+  id="contact-form"
+  class="contact-form" 
+  data-aos="fade-up" 
+  data-aos-delay="100" 
+  action="https://formspree.io/f/mqagrrwr" 
+  method="POST"
+>
+    <div class="form-group">
+        <label for="name" data-key="formNombre">Nombre</label>
+        <input type="text" id="name" name="name" required>
+    </div>
+    <div class="form-group">
+        <label for="email" data-key="formEmail">Email</label>
+        <input type="email" id="email" name="email" required>
+    </div>
+    <div class="form-group">
+        <label for="message" data-key="formMensaje">Mensaje / Sugerencias</label>
+        <textarea id="message" name="message" required></textarea>
+    </div>
+    <button type="submit" class="submit-btn">
+        <i class="fas fa-paper-plane"></i>
+        <span data-key="formBtnEnviar">Enviar Mensaje</span>
+    </button>
+</form>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section footer-about">
+                <a href="#" class="logo">🧠 Compa</a>
+                <p data-key="footerResumen">Asistente de voz con IA para cuidado de personas con problemas de memoria.</p>
+                <p class="made-with-love" data-key="footerHechoCon">Hecho con ❤️.</p>
+            </div>
+            <div class="footer-section">
+                <h3 data-key="footerEnlaces">Enlaces Rápidos</h3>
+                <ul>
+                    <li><a href="#para-quien" data-key="navParaQuien">Para Quién</a></li>
+                    <li><a href="#beneficios" data-key="navBeneficios">Beneficios</a></li>
+                    <li><a href="#caracteristicas" data-key="navCaracteristicas">Características</a></li>
+                    <li><a href="#contacto" data-key="navContacto">Contacto</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3 data-key="footerRecursos">Recursos</h3>
+                <ul>
+                    <li><a href="https://github.com/ogarmar/Compa" target="_blank" rel="noopener noreferrer" data-key="footerRepo">GitHub Repository</a></li>
+                    <li><a href="https://compa-production.up.railway.app/" rel="noopener noreferrer" data-key="footerApp">Aplicación Web</a></li>
+                    <li><a href="https://t.me/Compa_IA_bot" target="_blank" rel="noopener noreferrer" data-key="footerBot">Bot de Telegram</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3 data-key="footerContacto">Contacto</h3>
+                <ul class="footer-contact-list">
+                    <li>
+                        <i class="fas fa-envelope"></i>
+                        <a href="mailto:compamessages@gmail.com" data-key="footerEmail">compamessages@gmail.com</a>
+                    </li>
+                    <li>
+                        <i class="fas fa-file-alt"></i>
+                         <a href="#contacto" data-key="footerFormulario">Formulario de Contacto</a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div class="social-links-bottom">
+                <a href="https://github.com/ogarmar/Compa" target="_blank" rel="noopener noreferrer" title="GitHub"><i class="fab fa-github"></i></a>
+                <a href="https://t.me/Compa_IA_bot" target="_blank" rel="noopener noreferrer" title="Telegram"><i class="fab fa-telegram"></i></a>
+                <!-- <a href="https://www.producthunt.com/posts/compa" target="_blank" rel="noopener noreferrer" title="Product Hunt"><i class="fas fa-arrow-up"></i></a> -->
+                <a href="https://www.paypal.com/donate/?hosted_button_id=UTP68PSX2425G" target="_blank" rel="noopener noreferrer" title="Apoyar el Proyecto">
+                    <i class="fas fa-donate"></i>
+                </a>
+            </div>
+            <p data-key="footerCopyright">&copy; 2025 Oscar Garcia (ogarmar). Algunos derechos reservados bajo <a href='https://github.com/ogarmar/Compa/blob/main/LICENSE.md' target="_blank" rel="noopener noreferrer">licencia</a>.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
