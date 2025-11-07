@@ -8,7 +8,7 @@ Compa is an innovative AI-powered voice assistant specifically designed to suppo
 
 ---
 ## 🐿️ Index
-- [🌟 Key Features](#🌟-key-features)
+- [🌟 Key Features](#key-features)
 - [🏗️ Technical Architecture](#🏗️-technical-architecture)
 - [💻 Tech Stack](#💻-tech-stack)
 - [📂 Repository Structure](#📂-repository-structure)
