@@ -1,6 +1,6 @@
 # 🧠 Compa - AI Voice Assistant for Alzheimer's Care
 
-(it's done for Spanish Speakers, but also works in other languages, [Version en Español](#Version-en-Español))
+(it's done for Spanish Speakers, but also works in other languages, [Versión en Español](#versión-en-español)
 
 ## 🇬🇧 English Version
 
@@ -8,16 +8,16 @@ Compa is an innovative AI-powered voice assistant specifically designed to suppo
 
 ---
 ## 🐿️ Index
-- [🌟 Key Features](#key-features)
-- [🏗️ Technical Architecture](#technical-architecture)
-- [💻 Tech Stack](#tech-stack)
-- [📂 Repository Structure](#repository-structure)
-- [🚀 Getting Started](#getting-started)
-- [🔐 Security Features](#security-features)
-- [📚 API Documentation](#api-documentation)
-- [🤝 Contributing](#contributing)
-- [📄 License](#license)
-- [🙏 Acknowledgments](#acknowledgments)
+- [🌟 Key Features](#🌟-key-features)
+- [🏗️ Technical Architecture](#🏗️-technical-architecture)
+- [💻 Tech Stack](#💻-tech-stack)
+- [📂 Repository Structure](#📂-repository-structure)
+- [🚀 Getting Started](#🚀-getting-started)
+- [🔐 Security Features](#🔐-security-features)
+- [📚 API Documentation](#📚-api-documentation)
+- [🤝 Contributing](#🤝-contributing)
+- [📄 License](#📄-license)
+- [🙏 Acknowledgments](#🙏-acknowledgments)
   
 ---
 
@@ -204,7 +204,7 @@ Enjoy talking, sharing and building with Compa!
 
 # 🧠 Compa - Asistente de Voz con IA para el Cuidado del Alzheimer
 
-[English version above](#english-version)¡
+[English version above](#english-version)
 
 ## 🇪🇸 Version en Español
 
@@ -212,16 +212,16 @@ Compa es un innovador asistente de voz potenciado por IA, específicamente dise�
 
 ---
 ## 🐿️ Indice
-- [🌟 Características Principales](#características-principales)
-- [🏗️ Arquitectura Técnica](#arquitectura-técnica)
-- [💻 Stack Tecnológico](#stack-tecnológico)
-- [📂 Estructura del Repositorio](#estructura-del-repositorio)
-- [🚀 Primeros Pasos](#primeros-pasos)
-- [🔐 Características de Seguridad](#características-de-seguridad)
-- [📚 Documentación de la API](#documentación-de-la-api)
-- [🤝 Contribuir](#contribuir)
-- [📄 Licencia](#licencia)
-- [🙏 Agradecimientos](#agradecimientos)
+- [🌟 Características Principales](#🌟-características-principales)
+- [🏗️ Arquitectura Técnica](#🏗️-arquitectura-técnica)
+- [💻 Stack Tecnológico](#💻-stack-tecnológico)
+- [📂 Estructura del Repositorio](#📂-estructura-del-repositorio)
+- [🚀 Primeros Pasos](#🚀-primeros-pasos)
+- [🔐 Características de Seguridad](#🔐-características-de-seguridad)
+- [📚 Documentación de la API](#📚-documentación-de-la-api)
+- [🤝 Contribuir](#🤝-contribuir)
+- [📄 Licencia](#📄-licencia)
+- [🙏 Agradecimientos](#🙏-agradecimientos)
 
 ---
 ## 🌟 Características Principales
