@@ -1,163 +1,174 @@
 # 🧠 Compa - AI Voice Assistant for Alzheimer's Care
 
-(it's done for Spanish Speakers, but also works in other languages, [spanish version below](#spanish-version))
+(it's done for Spanish Speakers, but also works in other languages, [Version en Español](#Version-en-Español))
 
-## English Version
+## 🇬🇧 English Version
 
-<<<<<<< HEAD
-Compa es un innovador asistente de voz potenciado por IA, específicamente diseñado para apoyar a personas con problemas de memoria (como la enfermedad de Alzheimer) y sus familias. Combina interacción por voz en tiempo real, gestión de memoria y características de comunicación familiar para proporcionar una solución integral de cuidado.
-=======
 Compa is an innovative AI-powered voice assistant specifically designed to support individuals with memory issues (like the Alzheimer's disease) and their families. It combines real-time voice interaction, memory management, and family communication features to provide a comprehensive care solution.
+
+---
+## 🐿️ Index
+- [🌟 Key Features](#key-features)
+- [🏗️ Technical Architecture](#technical-architecture)
+- [💻 Tech Stack](#tech-stack)
+- [📂 Repository Structure](#repository-structure)
+- [🚀 Getting Started](#getting-started)
+- [🔐 Security Features](#security-features)
+- [📚 API Documentation](#api-documentation)
+- [🤝 Contributing](#contributing)
+- [📄 License](#license)
+- [🙏 Acknowledgments](#acknowledgments)
+  
+---
 
 ## 🌟 Key Features
 
-- [Features](#key-features)
-- [Architecture Overview](#technical-architecture)
-- [Repository Structure](#repository-structure)
-- [Getting Started](#getting-started)
-- [Core Components](#core-components)
-- [Security Considerations](#ecurity-features)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgments](#acknowledgments)
+- **🎙️ Voice-First Interaction**: Natural conversation interface using Web Speech API  
+- **🧠 Memory Management**: Intelligent system to store and recall personal memories  
+- **👨‍👩‍👧‍👦 Family Connection**: Integrated Telegram bot for family messaging  
+- **🤖 AI-Powered Responses**: Context-aware responses using Google Gemini AI  
+- **🔄 Real-Time Updates**: WebSocket-based instant communication  
+- **🗄️ Database Integration**: Robust PostgreSQL storage with SQLAlchemy ORM  
+  _Now includes tables for `user_sessions` and `phone_verifications`._  
+- **📱 Device Management**: Multi-device support with secure connection codes  
+  _Devices are now linked to verified phone accounts._  
+- **🔐 Secure SMS Authentication**: User verification and session creation using **Twilio Verify** to protect access  
 
 ---
-
-- **🎙️ Voice-First Interaction**: Natural conversation interface using Web Speech API
-- **🧠 Memory Management**: Intelligent system to store and recall personal memories
-- **👨‍👩‍👧‍👦 Family Connection**: Integrated Telegram bot for family messaging
-- **🤖 AI-Powered Responses**: Context-aware responses using Google Gemini AI
-- **🔄 Real-Time Updates**: WebSocket-based instant communication
-- **🗄️ Database Integration**: Robust PostgreSQL storage with SQLAlchemy ORM
-- **📱 Device Management**: Multi-device support with secure connection codes
 
 ## 🏗️ Technical Architecture
 
 ```mermaid
 graph TD
-    A[Frontend - Web UI] -->|WebSocket| B[FastAPI Backend]
+    A[Frontend Login] -->|WebSocket| B[FastAPI Backend]
+    A -->|Auth Flow /auth| B
     B --> C[Memory Manager]
     B --> D[Telegram Bot]
     B --> E[Google Gemini AI]
     B --> F[PostgreSQL Database]
-    D -->|Messages| G[Family Members]
+    B --> G[SMS Service Twilio]
+    D -->|Messages| H[Family Members]
     C -->|Store/Retrieve| F
     E -->|Generate Responses| B
+    G -->|Verify User| B
 ```
+---
 
-## 💻 Stack Tecnológico
+## 💻 Tech Stack
 
 ### Backend
-
-- **FastAPI**: High-performance async web framework
-- **SQLAlchemy**: SQL toolkit and ORM
-- **PostgreSQL**: Primary database (via asyncpg)
-- **Google Gemini AI**: Advanced language model integration
-- **python-telegram-bot**: Telegram integration
-- **WebSocket**: Real-time communication
+- **FastAPI** – High-performance async web framework  
+- **SQLAlchemy** – SQL toolkit and ORM  
+- **PostgreSQL** – Primary database (via asyncpg)  
+- **Google Gemini AI** – Advanced language model integration  
+- **python-telegram-bot** – Telegram integration  
+- **Twilio** – SMS-based user verification  
+- **WebSocket** – Real-time communication  
 
 ### Frontend
-
-- **HTML5**: Modern semantic markup
-- **CSS3**: Responsive design with animations
-- **JavaScript**: Web Speech API integration
-- **WebSocket**: Live updates and communication
+- **HTML5 / login.html** – Modern login and authentication page  
+- **CSS3** – Responsive design with animations  
+- **JavaScript** – Web Speech API integration  
+- **Authentication Flow Logic** – Handles cookies and session management  
+- **WebSocket** – Live updates and communication  
 
 ---
 
-## Repository Structure
+## 📂 Repository Structure
 
 ```
 Compa/
 │
 ├── backend/
-│   ├── main.py            # FastAPI backend and WebSocket
-│   ├── telegram_bot.py    # Telegram bot integration
+│   ├── main.py               # FastAPI backend and WebSocket
+│   ├── telegram_bot.py       # Telegram bot integration
+│   ├── sms_service.py        # SMS verification logic (Twilio)
 │
 ├── frontend/
 │   ├── static/
-│   │   ├── index.html       # UI Principal
-│   │   ├── style.css        # Hoja de estilos
-│   │   └── app.js           # Lógica WebSocket, UI y funciones de voz
+│   │   ├── index.html        # Main UI
+│   │   ├── style.css         # Styling
+│   │   └── app.js            # WebSocket, UI, voice logic
+│   ├── login.html            # Phone authentication page
 │
-├── requirements.txt         # Backend Python dependencies
-├── .env                     # Environment configuration (not committed)
-├── README.md                # Documentation
-└── LICENSE.md               # License
+├── railway.toml              # Deployment script (Release Command) for Railway
+├── .env.example              # Template for new Twilio environment variables
+├── requirements.txt          # Python dependencies
+├── .env                      # Environment configuration (not committed)
+├── README.md                 # Documentation
+└── LICENSE.md                # License
 ```
 
 ---
 
-## Primeros Pasos
+## 🚀 Getting Started
 
-### Prerrequisitos
+### Prerequisites
+- **Python >= 3.11**  
+- **Telegram account** to set up the bot  
+- **API access to Google Gemini** (via developer token)  
+- **Twilio account** (Account SID, Auth Token, and Verify SID)  
 
-- Python >= 3.11
-- Telegram account to set up the bot
-- API access to Google Gemini (via developer token)
+### Installation Steps
 
-### Pasos de Instalación
-
-1.  **Clone the repository:**
-    ```
-    git clone [https://github.com/ogarmar/Compa.git](https://github.com/ogarmar/Compa.git)
+1. **Clone the repository:**
+    ```bash
+    git clone https://github.com/ogarmar/Compa.git
     cd Compa
     ```
-2.  **Install Python dependencies:**
-    ```
+
+2. **Install Python dependencies:**
+    ```bash
     pip install -r requirements.txt
     ```
-3.  **Configure environment variables (`.env`):**
-    ```
+
+3. **Configure environment variables (`.env`):**
+    ```bash
     GEMINI_TOKEN=your_gemini_api_key
     TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+    TWILIO_ACCOUNT_SID=your_twilio_sid
+    TWILIO_AUTH_TOKEN=your_twilio_token
+    TWILIO_VERIFY_SERVICE_SID=your_twilio_verify_sid
     ```
-4.  **Start the backend server:**
-    ```
+
+4. **Start the backend server:**
+    ```bash
     python backend/main.py
     ```
-5.  **Open the frontend in your browser:**
 
-    - Go to `http://localhost:8000` (by default)
-
-6.  **To send messages to Compa**
-    - Search this bot on telegram: @Compa_IA_bot
-    - Send the bot the message: /start
-    - Connect to yours/your family member Compa user by typing: /connect (and yours/their number)
+5. **Open the frontend in your browser:**
+    - Go to `http://localhost:8000/login` to authenticate first.  
 
 ---
 
-## 📱 Gestión de Dispositivos
+## 🔐 Security Features
 
-Compa utiliza un sistema seguro de gestión de dispositivos con códigos únicos de 6 dígitos:
+- **Secure SMS Verification**: Access to the app is now protected by phone-based verification (Twilio Verify).  
+- **User Sessions**: Each verified user creates a session stored in the database and saved as a `session_token` cookie.  
+- **Device Validation**: Each `device_id` is linked to the authenticated user session.  
+- **Secure WebSocket Connections**: Encrypted communication in real time.  
+- **Database Authentication**: Protected PostgreSQL connections.  
+- **Environment Variables**: Secure credential management.  
 
-- Each device gets a unique identifier
-- Family members connect via Telegram using device codes
-- Database-driven device tracking and validation
-- Real-time connection status monitoring
+---
 
-## 🔐 Características de Seguridad
+## 📚 API Documentation
 
-- **Secure WebSocket Connections**: Real-time encrypted communication
-- **Database Authentication**: Protected PostgreSQL connections
-- **Device Validation**: Unique code-based device authentication
-- **Telegram Authorization**: Whitelist-based user access
-- **Environment Variables**: Secure credential management
+### 🧾 Authentication HTTP Endpoints
 
-## 📚 Documentación de la API
+- `GET /login`  
+- `GET /` _(now protected)_  
+- `POST /auth/send-code`  
+- `POST /auth/verify-code`  
+- `POST /auth/validate-session`  
+- `POST /auth/logout`  
 
-### Endpoints WebSocket
+### 🧩 App HTTP Endpoints _(Protected)_
+- `/` – Main application  
+- `/static/*` – Static files (CSS, JavaScript)  
 
-- `/ws`: Main WebSocket connection
-  - Handles real-time communication
-  - Manages device connections
-  - Routes messages and responses
-
-### Endpoints HTTP
-
-- `/`: Serves the main application
-- `/static/*`: Static files (CSS, JavaScript)
-- Additional API documentation available via SwaggerUI at `/docs`
+### 🧠 WebSocket Endpoints
+- `/ws` – Real-time communication, device connection management, and message routing
 
 ## 🤝 Contributing
 
@@ -184,164 +195,185 @@ Enjoy talking, sharing and building with Compa!
 
 ---
 
----
 
----
+------------------------------------------------------------------
+------------------------------------------------------------------
+------------------------------------------------------------------
 
-## Spanish Version
+
 
 # 🧠 Compa - Asistente de Voz con IA para el Cuidado del Alzheimer
 
-[English version above](#english-version) | Versión en Español
+[English version above](#english-version)¡
+
+## 🇪🇸 Version en Español
 
 Compa es un innovador asistente de voz potenciado por IA, específicamente diseñado para apoyar a personas con problemas de memoria (como la enfermedad de Alzheimer) y sus familias. Combina interacción por voz en tiempo real, gestión de memoria y características de comunicación familiar para proporcionar una solución integral de cuidado.
 
+---
+## 🐿️ Indice
+- [🌟 Características Principales](#características-principales)
+- [🏗️ Arquitectura Técnica](#arquitectura-técnica)
+- [💻 Stack Tecnológico](#stack-tecnológico)
+- [📂 Estructura del Repositorio](#estructura-del-repositorio)
+- [🚀 Primeros Pasos](#primeros-pasos)
+- [🔐 Características de Seguridad](#características-de-seguridad)
+- [📚 Documentación de la API](#documentación-de-la-api)
+- [🤝 Contribuir](#contribuir)
+- [📄 Licencia](#licencia)
+- [🙏 Agradecimientos](#agradecimientos)
+
+---
 ## 🌟 Características Principales
 
-- [Características](#características-principales)
-- [Visión General de la Arquitectura](#arquitectura-técnica)
-- [Estructura del Repositorio](#estructura-del-repositorio)
-- [Primeros Pasos](#primeros-pasos)
-- [Consideraciones de Seguridad](#características-de-seguridad)
-- [Contribuir](#contribuir)
-- [Licencia](#licencia)
-- [Agradecimientos](#agradecimientos)
+- **🎙️ Interacción por Voz**: Interfaz de conversación natural usando Web Speech API  
+- **🧠 Gestión de Memoria**: Sistema inteligente para almacenar y recordar memorias personales  
+- **👨‍👩‍👧‍👦 Conexión Familiar**: Bot de Telegram integrado para mensajería familiar  
+- **🤖 Respuestas con IA**: Respuestas contextuales usando Google Gemini AI  
+- **🔄 Actualizaciones en Tiempo Real**: Comunicación instantánea basada en WebSocket  
+- **🗄️ Integración con Base de Datos**: Almacenamiento robusto en PostgreSQL con SQLAlchemy ORM  
+  _Ahora incluye tablas para `user_sessions` y `phone_verifications`._  
+- **📱 Gestión de Dispositivos**: Soporte multi-dispositivo con códigos seguros de conexión  
+  _Los dispositivos ahora se enlazan a las cuentas de teléfono verificadas._  
+- **🔐 Autenticación Segura por SMS**: Verificación de usuario y creación de sesión usando **Twilio Verify** para proteger el acceso
 
 ---
 
-- **🎙️ Interacción por Voz**: Interfaz de conversación natural usando Web Speech API
-- **🧠 Gestión de Memoria**: Sistema inteligente para almacenar y recordar memorias personales
-- **👨‍👩‍👧‍👦 Conexión Familiar**: Bot de Telegram integrado para mensajería familiar
-- **🤖 Respuestas con IA**: Respuestas contextuales usando Google Gemini AI
-- **🔄 Actualizaciones en Tiempo Real**: Comunicación instantánea basada en WebSocket
-- **🗄️ Integración con Base de Datos**: Almacenamiento robusto en PostgreSQL con SQLAlchemy ORM
-- **📱 Gestión de Dispositivos**: Soporte multi-dispositivo con códigos de conexión seguros
-
 ## 🏗️ Arquitectura Técnica
-
 ```mermaid
 graph TD
-    A[Frontend - Web UI] -->|WebSocket| B[FastAPI Backend]
-    B --> C[Memory Manager]
-    B --> D[Telegram Bot]
+    A[Frontend Login] -->|WebSocket| B[Backend FastAPI]
+    A -->|Flujo /auth| B
+    B --> C[Gestor Memoria]
+    B --> D[Bot Telegram]
     B --> E[Google Gemini AI]
-    B --> F[PostgreSQL Database]
-    D -->|Messages| G[Family Members]
-    C -->|Store/Retrieve| F
-    E -->|Generate Responses| B
+    B --> F[PostgreSQL]
+    B --> G[Servicio SMS Twilio]
+    D -->|Mensajes| H[Familiares]
+    C -->|Guardar/Recuperar| F
+    E -->|Generar Respuestas| B
+    G -->|Verificar Usuario| B
 ```
+---
 
 ## 💻 Stack Tecnológico
 
 ### Backend
-
-- **FastAPI**: Framework web asíncrono de alto rendimiento
-- **SQLAlchemy**: Kit de herramientas SQL y ORM
-- **PostgreSQL**: Base de datos principal (vía asyncpg)
-- **Google Gemini AI**: Integración de modelo de lenguaje avanzado
-- **python-telegram-bot**: Integración con Telegram
-- **WebSocket**: Comunicación en tiempo real
+- **FastAPI** – Framework web asíncrono de alto rendimiento  
+- **SQLAlchemy** – Kit de herramientas SQL y ORM  
+- **PostgreSQL** – Base de datos principal (vía asyncpg)  
+- **Google Gemini AI** – Integración avanzada de modelo de lenguaje  
+- **python-telegram-bot** – Integración con Telegram  
+- **Twilio** – Verificación de usuario mediante SMS  
+- **WebSocket** – Comunicación en tiempo real  
 
 ### Frontend
-
-- **HTML5**: Marcado semántico moderno
-- **CSS3**: Diseño responsivo con animaciones
-- **JavaScript**: Integración de Web Speech API
-- **WebSocket**: Actualizaciones en vivo y comunicación
+- **HTML5 / login.html** – Página moderna de inicio de sesión y autenticación  
+- **CSS3** – Diseño responsivo con animaciones  
+- **JavaScript** – Integración con Web Speech API  
+- **Lógica de Flujo de Autenticación** – Manejo de cookies y gestión de sesión  
+- **WebSocket** – Actualizaciones en vivo y comunicación  
 
 ---
-
-## Estructura del Repositorio
-
+## 📂 Estructura del Repositorio
 ```
 Compa/
 │
 ├── backend/
-│   ├── main.py            # Backend FastAPI y WebSocket
-│   ├── telegram_bot.py    # Integración del bot de Telegram
+│   ├── main.py               # Backend principal (FastAPI + WebSocket)
+│   ├── sms_service.py        # Lógica de verificación SMS (Twilio)
+│   ├── telegram_bot.py       # Integración con Telegram
+│   ├── database/
+│   │   ├── models.py         # Modelos SQLAlchemy (incluye user_sessions y phone_verifications)
+│   │   └── __init__.py
+│   └── utils/
+│       └── auth.py           # Utilidades de autenticación y manejo de sesiones
 │
 ├── frontend/
 │   ├── static/
-│   │   ├── index.html       # UI Principal
-│   │   ├── style.css        # Hoja de estilos
-│   │   └── app.js           # Lógica WebSocket, UI y funciones de voz
+│   │   ├── index.html        # Interfaz principal
+│   │   ├── style.css         # Hoja de estilos
+│   │   └── app.js            # Lógica de voz, UI y WebSocket
+│   ├── login.html            # Página de autenticación por teléfono
 │
-├── requirements.txt         # Dependencias Python del backend
-├── .env                     # Configuración de entorno (no incluido)
-├── README.md                # Documentación
-└── LICENSE.md               # Licencia
+├── requirements.txt          # Dependencias de Python
+├── .env.example              # Plantilla con variables de entorno (Twilio, Gemini, Telegram)
+├── railway.toml              # Script de despliegue (Release Command para Railway)
+├── README.md                 # Documentación del proyecto
+└── LICENSE.md                # Licencia
 ```
+---
 
-## Primeros Pasos
+## 🚀 Primeros Pasos
 
 ### Prerrequisitos
-
-- Python >= 3.11
-- Cuenta de Telegram para configurar el bot
-- Acceso a la API de Google Gemini (vía token de desarrollador)
+- **Python >= 3.11**  
+- **Cuenta de Telegram** para configurar el bot  
+- **Acceso a la API de Google Gemini** (vía token de desarrollador)  
+- **Cuenta de Twilio** (Account SID, Auth Token y Verify SID)  
 
 ### Pasos de Instalación
 
-1.  **Clonar el repositorio:**
-    ```
-    git clone [https://github.com/ogarmar/Compa.git](https://github.com/ogarmar/Compa.git)
+1. **Clonar el repositorio:**
+    ```bash
+    git clone https://github.com/ogarmar/Compa.git
     cd Compa
     ```
-2.  **Instalar dependencias de Python:**
-    ```
+
+2. **Instalar dependencias de Python:**
+    ```bash
     pip install -r requirements.txt
     ```
-3.  **Configurar variables de entorno (`.env`):**
-    ```
+
+3. **Configurar variables de entorno (`.env`):**
+    ```bash
     GEMINI_TOKEN=tu_clave_api_gemini
     TELEGRAM_BOT_TOKEN=tu_token_bot_telegram
+    TWILIO_ACCOUNT_SID=tu_twilio_sid
+    TWILIO_AUTH_TOKEN=tu_twilio_token
+    TWILIO_VERIFY_SERVICE_SID=tu_twilio_verify_sid
     ```
-4.  **Iniciar el servidor backend:**
-    ```
+
+4. **Iniciar el servidor backend:**
+    ```bash
     python backend/main.py
     ```
-5.  **Abrir el frontend en el navegador:**
 
-    - Ir a `http://localhost:8000` (por defecto)
-
-6.  **Para enviar mensajes a Compa:**
-    - Buscar este bot en Telegram: @Compa_IA_bot
-    - Enviar el mensaje: /start
-    - Conectar con tu usuario o el de tu familiar usando: /connect (y tu/su número)
+5. **Abrir el frontend en el navegador:**
+    - Ir a `http://localhost:8000/login` para autenticarse primero.  
 
 ---
 
-## 📱 Gestión de Dispositivos
-
-Compa utiliza un sistema seguro de gestión de dispositivos con códigos únicos de 6 dígitos:
-
-- Cada dispositivo recibe un identificador único
-- Los familiares se conectan vía Telegram usando códigos de dispositivo
-- Seguimiento y validación de dispositivos basado en base de datos
-- Monitoreo de estado de conexión en tiempo real
-
 ## 🔐 Características de Seguridad
 
-- **Conexiones WebSocket Seguras**: Comunicación encriptada en tiempo real
-- **Autenticación de Base de Datos**: Conexiones PostgreSQL protegidas
-- **Validación de Dispositivos**: Autenticación basada en códigos únicos
-- **Autorización de Telegram**: Acceso basado en lista blanca
-- **Variables de Entorno**: Gestión segura de credenciales
+- **Verificación Segura por SMS**: El acceso a la app ahora está protegido mediante verificación telefónica con **Twilio Verify**.  
+- **Sesiones de Usuario**: Cada usuario verificado crea una sesión almacenada en la base de datos y guardada como cookie `session_token`.  
+- **Validación de Dispositivos**: Cada `device_id` se asocia a la sesión de usuario autenticada.  
+- **Conexiones WebSocket Seguras**: Comunicación cifrada en tiempo real.  
+- **Autenticación de Base de Datos**: Conexiones protegidas a PostgreSQL.  
+- **Variables de Entorno**: Gestión segura de credenciales y tokens.  
+
+---
 
 ## 📚 Documentación de la API
 
-### Endpoints WebSocket
+### 🧾 Endpoints HTTP de Autenticación
 
-- `/ws`: Conexión WebSocket principal
-  - Maneja comunicación en tiempo real
-  - Gestiona conexiones de dispositivos
-  - Enruta mensajes y respuestas
+- `GET /login`  
+- `GET /` _(ahora protegido)_  
+- `POST /auth/send-code`  
+- `POST /auth/verify-code`  
+- `POST /auth/validate-session`  
+- `POST /auth/logout`  
 
-### Endpoints HTTP
+### 🧩 Endpoints HTTP de la App _(Protegidos)_
+- `/` – Aplicación principal  
+- `/static/*` – Archivos estáticos (CSS, JavaScript)  
 
-- `/`: Sirve la aplicación principal
-- `/static/*`: Archivos estáticos (CSS, JavaScript)
-- Documentación adicional de la API disponible vía SwaggerUI en `/docs`
+### 🧠 Endpoints WebSocket
+- `/ws` – Comunicación en tiempo real, gestión de conexión de dispositivos y enrutamiento de mensajes  
+
+---
 
 ## 🤝 Contribuir
 
