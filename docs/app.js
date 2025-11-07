@@ -175,7 +175,7 @@ const translations = {
         footerApp: "Aplicación Web",
         footerBot: "Bot de Telegram",
         footerContacto: "Contacto",
-        footerEmail: "hola@compa.app",
+        footerEmail: "compamessages@gmail.com",
         footerFormulario: "Formulario de Contacto",
         footerCopyright: "&copy; 2025 Oscar Garcia (ogarmar). Algunos derechos reservados bajo <a href='https://github.com/ogarmar/Compa/blob/main/LICENSE.md'>licencia</a>."
     },
