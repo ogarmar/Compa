@@ -757,7 +757,7 @@ section {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(90, 146, 197, 0.2);
     background: rgba(255, 255, 255, 0.8); 
-
+}
 .form-group textarea {
     resize: vertical;
     min-height: 150px;
@@ -1060,4 +1060,4 @@ footer {
     .social-links-bottom {
         flex-wrap: wrap;
     }
-}}
+}
