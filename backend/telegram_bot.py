@@ -6,7 +6,9 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import aiofiles
 import traceback
-
+import secrets
+from sqlalchemy import delete
+from .database import async_session, PhoneVerification
 from backend.device_utils import link_chat_to_device, get_device_from_chat_db
 
 # File paths for persistent data storage
@@ -487,6 +489,56 @@ El mensaje llegará directamente al dispositivo conectado."""
         except Exception as e:
             print(f"Error en comando status: {e}")
             await update.message.reply_text("❌ Error obteniendo estado.")
+        
+        # ... (dentro de la clase FamilyMessagesBot)
+
+    async def login_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja el comando /login para autenticar al usuario."""
+        
+        chat_id = update.effective_chat.id
+        user_name = update.effective_user.first_name
+        
+        # 1. Generar un token de un solo uso
+        token = secrets.token_urlsafe(32)
+        
+        # 2. Reutilizar la tabla 'PhoneVerification' para guardar el token
+        #    Usaremos chat_id (como string) en lugar de phone_number
+        try:
+            async with async_session() as session:
+                from datetime import datetime, timedelta
+
+                # Borrar tokens antiguos para este chat_id
+                await session.execute(
+                    delete(PhoneVerification).where(PhoneVerification.phone_number == str(chat_id))
+                )
+                
+                # Guardar el nuevo token
+                new_token = PhoneVerification(
+                    id=secrets.token_urlsafe(16),
+                    phone_number=str(chat_id), # Guardamos el chat_id aquí
+                    verification_code=token,   # Guardamos el token aquí
+                    expires_at=datetime.utcnow() + timedelta(minutes=5) # Válido por 5 mins
+                )
+                session.add(new_token)
+                await session.commit()
+            
+            # 3. Enviar el enlace mágico al usuario
+            # Usará la variable de entorno APP_BASE_URL, o localhost si no existe
+            base_url = os.getenv("APP_BASE_URL", "http://localhost:8000") 
+            login_link = f"{base_url}/auth/login_telegram?token={token}"
+            
+            await update.message.reply_text(
+                f"¡Hola {user_name}! 👋\n\n"
+                f"Para iniciar sesión en Compa, haz clic en este enlace. Es válido por 5 minutos:\n\n"
+                f"{login_link}\n\n"
+                f"(Si no has solicitado esto, puedes ignorar este mensaje).",
+                parse_mode="Markdown"
+            )
+            print(f"🔑 Enlace de login generado para el chat {chat_id}")
+
+        except Exception as e:
+            print(f"❌ Error al generar token de login: {e}")
+            await update.message.reply_text("Lo siento, ha ocurrido un error al intentar iniciar sesión. Por favor, inténtalo de nuevo.")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages - save and forward to connected device"""
@@ -555,9 +607,9 @@ El mensaje llegará directamente al dispositivo conectado."""
                 self.application.add_handler(CommandHandler("connect", self.handle_connect_command))
                 self.application.add_handler(CommandHandler("disconnect", self.handle_disconnect_command))
                 self.application.add_handler(CommandHandler("status", self.handle_status_command))
+                self.application.add_handler(CommandHandler("login", self.login_command))
                 # Register handler for all non-command text messages
-                self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-                
+                self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))                
                 # Initialize and start the bot application
                 await self.application.initialize()
                 await self.application.start()

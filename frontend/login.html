@@ -3,347 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compa - Verificación de Teléfono</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Compa - Iniciar Sesión</title>
+    <link rel="stylesheet" href="/static/style.css"> 
     <style>
+        /* Estilos específicos para esta página de login */
         .auth-container {
-            max-width: 400px;
+            max-width: 450px;
             margin: 100px auto;
             background: white;
             padding: 40px;
             border-radius: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
         }
-        
         .auth-container h1 {
-            text-align: center;
             color: #4a90e2;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
             margin-bottom: 20px;
         }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
+        .auth-container p {
+            font-size: 1.1rem;
             color: #333;
-            font-weight: 600;
+            line-height: 1.6;
         }
-        
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: #4a90e2;
-        }
-        
-        .btn-primary {
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .telegram-button {
+            display: inline-block;
+            background: #0088cc;
             color: white;
-            border: none;
+            padding: 12px 20px;
             border-radius: 8px;
-            font-size: 16px;
+            text-decoration: none;
             font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
+            margin-top: 25px;
+            transition: background 0.3s;
         }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
+        .telegram-button:hover {
+            background: #0077b3;
         }
-        
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .code-sent {
-            background: #e8f5e9;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-            color: #2e7d32;
-        }
-        
-        .error-message {
-            background: #ffebee;
-            color: #c62828;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        .phone-input-group {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .country-code {
-            width: 80px;
-        }
-        
-        .resend-timer {
-            text-align: center;
-            margin-top: 15px;
-            color: #666;
-            font-size: 14px;
+        .code-block {
+            background: #f0f0f0; 
+            padding: 10px; 
+            border-radius: 5px; 
+            font-size: 1.2rem; 
+            margin-top: 15px; 
+            display: inline-block;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
     <div class="auth-container">
         <h1>🧠 Compa</h1>
-        <p style="text-align: center; color: #666; margin-bottom: 30px;">
-            Ingresa tu número de teléfono para comenzar
+        <p>
+            Para iniciar sesión de forma segura, por favor, ve a tu chat de Telegram con el bot de Compa.
         </p>
+        <p>
+            Una vez allí, envía el comando:
+        </p>
+        <div class="code-block">/login</div>
         
-        <!-- Paso 1: Ingreso de teléfono -->
-        <div id="phoneStep">
-            <div class="form-group">
-                <label for="phoneNumber">Número de Teléfono</label>
-                <div class="phone-input-group">
-                    <input 
-                        type="text" 
-                        id="countryCode" 
-                        class="country-code" 
-                        value="+34" 
-                        placeholder="+34"
-                    >
-                    <input 
-                        type="tel" 
-                        id="phoneNumber" 
-                        placeholder="612345678"
-                        required
-                    >
-                </div>
-                <small style="color: #666; margin-top: 5px; display: block;">
-                    Formato: +34 612345678 (España)
-                </small>
-            </div>
-            
-            <button class="btn-primary" id="sendCodeBtn" onclick="sendCode()">
-                Enviar Código
-            </button>
-        </div>
-        
-        <!-- Paso 2: Verificación de código -->
-        <div id="codeStep" class="hidden">
-            <div class="code-sent">
-                ✅ Código enviado a <span id="sentPhone"></span>
-            </div>
-            
-            <div class="form-group">
-                <label for="verificationCode">Código de Verificación</label>
-                <input 
-                    type="text" 
-                    id="verificationCode" 
-                    placeholder="123456"
-                    maxlength="6"
-                    pattern="[0-9]{6}"
-                    required
-                >
-            </div>
-            
-            <button class="btn-primary" id="verifyBtn" onclick="verifyCode()">
-                Verificar Código
-            </button>
-            
-            <div class="resend-timer">
-                <button 
-                    class="btn-secondary" 
-                    id="resendBtn" 
-                    onclick="resendCode()" 
-                    disabled
-                >
-                    Reenviar código (<span id="timer">60</span>s)
-                </button>
-            </div>
-            
-            <button 
-                class="btn-secondary" 
-                onclick="backToPhone()" 
-                style="margin-top: 15px; background: #f5f5f5; color: #333;"
-            >
-                Cambiar Número
-            </button>
-        </div>
-        
-        <!-- Mensajes de error -->
-        <div id="errorMessage" class="error-message hidden"></div>
+        <a href="https://t.me/Compa_IA_bot" class="telegram-button" target="_blank" rel="noopener noreferrer">
+            Abrir Telegram
+        </a>
+        <p style="font-size: 0.9rem; color: #777; margin-top: 20px;">
+            (El bot te enviará un enlace. Debes abrir ese enlace en *este* navegador para completar el inicio de sesión).
+        </p>
     </div>
-
-    <script>
-        let currentPhone = '';
-        let resendTimer = null;
-        
-        // Enviar código de verificación
-        async function sendCode() {
-            const countryCode = document.getElementById('countryCode').value;
-            const phone = document.getElementById('phoneNumber').value;
-            const fullPhone = countryCode + phone;
-            
-            if (!phone) {
-                showError('Por favor ingresa tu número de teléfono');
-                return;
-            }
-            
-            const btn = document.getElementById('sendCodeBtn');
-            btn.disabled = true;
-            btn.textContent = 'Enviando...';
-            
-            try {
-                const response = await fetch('/auth/send-code', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        phone_number: fullPhone
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentPhone = fullPhone;
-                    document.getElementById('sentPhone').textContent = fullPhone;
-                    document.getElementById('phoneStep').classList.add('hidden');
-                    document.getElementById('codeStep').classList.remove('hidden');
-                    startResendTimer();
-                } else {
-                    showError(data.detail || 'Error al enviar el código');
-                    btn.disabled = false;
-                    btn.textContent = 'Enviar Código';
-                }
-            } catch (error) {
-                showError('Error de conexión. Intenta de nuevo.');
-                btn.disabled = false;
-                btn.textContent = 'Enviar Código';
-            }
-        }
-        
-        // Verificar código ingresado
-        async function verifyCode() {
-            const code = document.getElementById('verificationCode').value;
-            
-            if (!code || code.length !== 6) {
-                showError('Por favor ingresa el código de 6 dígitos');
-                return;
-            }
-            
-            const btn = document.getElementById('verifyBtn');
-            btn.disabled = true;
-            btn.textContent = 'Verificando...';
-            
-            try {
-                const response = await fetch('/auth/verify-code', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        phone_number: currentPhone,
-                        code: code
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.verified) {
-                    // Guardar token en cookie/localStorage
-                    const expires = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000); // 100 años
-                    document.cookie = `session_token=${data.session_token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
-                    document.cookie = `phone_number=${currentPhone}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
-                    
-                    // Redirigir a la app principal
-                    window.location.href = '/';
-                } else {
-                    showError(data.detail || 'Código incorrecto');
-                    btn.disabled = false;
-                    btn.textContent = 'Verificar Código';
-                }
-            } catch (error) {
-                showError('Error de conexión. Intenta de nuevo.');
-                btn.disabled = false;
-                btn.textContent = 'Verificar Código';
-            }
-        }
-        
-        // Reenviar código
-        async function resendCode() {
-            document.getElementById('resendBtn').disabled = true;
-            await sendCode();
-            startResendTimer();
-        }
-        
-        // Timer para reenvío
-        function startResendTimer() {
-            let seconds = 60;
-            const timerEl = document.getElementById('timer');
-            const resendBtn = document.getElementById('resendBtn');
-            
-            resendBtn.disabled = true;
-            
-            if (resendTimer) clearInterval(resendTimer);
-            
-            resendTimer = setInterval(() => {
-                seconds--;
-                timerEl.textContent = seconds;
-                
-                if (seconds <= 0) {
-                    clearInterval(resendTimer);
-                    resendBtn.disabled = false;
-                    resendBtn.innerHTML = 'Reenviar código';
-                }
-            }, 1000);
-        }
-        
-        // Volver a paso de teléfono
-        function backToPhone() {
-            document.getElementById('codeStep').classList.add('hidden');
-            document.getElementById('phoneStep').classList.remove('hidden');
-            document.getElementById('verificationCode').value = '';
-            if (resendTimer) clearInterval(resendTimer);
-        }
-        
-        // Mostrar mensaje de error
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message;
-            errorEl.classList.remove('hidden');
-            setTimeout(() => {
-                errorEl.classList.add('hidden');
-            }, 5000);
-        }
-        
-        // Auto-focus en código cuando se muestra
-        const codeInput = document.getElementById('verificationCode');
-        codeInput.addEventListener('input', (e) => {
-            // Solo números
-            e.target.value = e.target.value.replace(/[^0-9]/g, '');
-            
-            // Auto-submit cuando se completan 6 dígitos
-            if (e.target.value.length === 6) {
-                verifyCode();
-            }
-        });
-    </script>
 </body>
 </html>

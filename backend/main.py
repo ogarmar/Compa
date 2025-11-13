@@ -9,13 +9,14 @@ import uvicorn
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta 
 from dotenv import load_dotenv
 import asyncio
 from googlesearch import search
 import traceback
 import google.generativeai as genai
 import uuid
+import secrets
 from collections import defaultdict
 from pydantic import BaseModel
 
@@ -1433,6 +1434,87 @@ async def get_pending_requests():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ... (en backend/main.py)
+
+# ============================================
+# AUTH TELEGRAM ENDPOINT
+# ============================================
+
+@app.get("/auth/login_telegram")
+async def auth_with_telegram(request: Request, token: str):
+    """
+    Valida el token de un solo uso de Telegram y crea una sesión.
+    Este es el endpoint que recibe el "enlace mágico".
+    """
+    try:
+        async with async_session() as session:
+            from sqlalchemy import delete
+            
+            # 1. Buscar el token en la tabla (que reutilizamos)
+            stmt = select(PhoneVerification).where(
+                PhoneVerification.verification_code == token,
+                PhoneVerification.expires_at > datetime.utcnow()
+            )
+            result = await session.execute(stmt)
+            token_data = result.scalar_one_or_none()
+            
+            if not token_data:
+                raise HTTPException(status_code=401, detail="Enlace inválido o expirado. Por favor, pide uno nuevo en Telegram.")
+            
+            # 2. Obtener el chat_id (guardado en 'phone_number')
+            chat_id_str = token_data.phone_number
+            
+            # 3. Borrar el token para que no se pueda reusar
+            await session.execute(
+                delete(PhoneVerification).where(PhoneVerification.id == token_data.id)
+            )
+            
+            # 4. Crear la sesión de usuario (la que se usará para siempre)
+            session_token = secrets.token_urlsafe(32)
+            new_session = UserSession(
+                phone_number=chat_id_str, # Guardamos el chat_id como identificador
+                session_token=session_token,
+                verified=True,
+                expires_at = datetime.utcnow() + timedelta(days=365) # Sesión de 1 año
+            )
+            session.add(new_session)
+            await session.commit()
+            
+            # 5. Redirigir al usuario a la app y establecer la cookie
+            response = RedirectResponse(url="/")
+            expires = datetime.utcnow() + timedelta(days=365)
+            
+            # Esta cookie es la que usa frontend/app.js para el "login automático"
+            response.set_cookie(
+                key="session_token",
+                value=session_token,
+                expires=expires.strftime("%a, %d %b %Y %H:%M:%S GMT"), # Formato cookie
+                path="/",
+                samesite="lax",
+                httponly=False # False para que JS pueda leerla (como en tu login.html)
+            )
+            response.set_cookie(
+                key="phone_number", # Mantenemos el nombre por compatibilidad
+                value=chat_id_str,
+                expires=expires.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+                path="/",
+                samesite="lax",
+                httponly=False
+            )
+            
+            print(f"✅ Sesión creada exitosamente para el chat {chat_id_str}")
+            return response
+
+    except Exception as e:
+        print(f"❌ Error en /auth/login_telegram: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Error al procesar el inicio de sesión.")
+
+# ============================================
+# FRONTEND STATIC FILES - Serve web application
+# ============================================
+# ... (el resto del archivo main.py)
 
 # ============================================
 # FRONTEND STATIC FILES - Serve web application
