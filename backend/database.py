@@ -63,7 +63,7 @@ class PhoneVerification(Base):
     
     id = Column(String(100), primary_key=True)
     phone_number = Column(String(20), index=True, nullable=False)
-    verification_code = Column(String(6), nullable=False)
+    verification_code = Column(String(200), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(minutes=10))
     attempts = Column(Integer, default=0)
