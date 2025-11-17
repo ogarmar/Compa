@@ -1267,13 +1267,17 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             this.sessionToken = null;
             this.phoneNumber = null;
         }
-        
+        getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
         // Cargar sesión desde localStorage
         loadSession() {
-            this.sessionToken = localStorage.getItem('session_token');
-            this.phoneNumber = localStorage.getItem('phone_number');
+            this.sessionToken = this.getCookie('session_token');
+            this.phoneNumber = this.getCookie('phone_number');
             return this.sessionToken !== null;
-        }
+          }
         
         // Validar sesión con el servidor
         async validateSession() {
@@ -1309,8 +1313,13 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         
         // Limpiar sesión y redirigir a login
         clearSession() {
-            localStorage.removeItem('session_token');
+            localStorage.removeItem('session_token'); // Limpia localStorage por si acaso
             localStorage.removeItem('phone_number');
+            
+            // Lo más importante: Borra las cookies
+            document.cookie = 'session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'phone_number=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
             this.sessionToken = null;
             this.phoneNumber = null;
         }
