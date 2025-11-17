@@ -3,7 +3,7 @@ from fastapi import Request, Header, FastAPI, WebSocket, WebSocketDisconnect, HT
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import select, or_, func, Column, String, JSON, DateTime
+from sqlalchemy import select, or_, func, Column, String, JSON, DateTime, update
 from sqlalchemy.sql import text
 import uvicorn
 import os
@@ -20,7 +20,7 @@ import secrets
 from collections import defaultdict
 from pydantic import BaseModel
 
-from .database import async_session, Memory, init_db, DeviceData, UserSession, PhoneVerification
+from .database import async_session, Memory, init_db, DeviceData, UserSession, PhoneVerification, FamilyMessages
 from .device_utils import link_chat_to_device, get_chat_id_from_device_db, get_device_from_chat_db
 from .sms_service import sms_service
 from .telegram_bot import FamilyMessagesBot
@@ -1239,130 +1239,101 @@ async def verify_memory_usage(device_id: str):
 # Get unread family messages
 @app.get("/family/messages")
 async def get_family_messages(device_id: str = Query(...)):
-    """Obtiene mensajes no leídos de familiares PARA UN DISPOSITIVO ESPECÍFICO"""
+    """Obtiene mensajes no leídos de familiares PARA UN DISPOSITIVO ESPECÍFICO desde la DB"""
     print(f"🔍 SOLICITUD /family/messages - Device: {device_id}")
     
     if not telegram_bot:
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     
     try:
-        chat_id = await get_chat_id_from_device_db(device_id)
-        
-        all_messages = await telegram_bot.load_messages()
-        
-       
-        if chat_id:
-            device_messages = [msg for msg in all_messages if msg.get("chat_id") == chat_id]
-        else:
-            device_messages = []  
-        
-        
-        unread_messages = [msg for msg in device_messages if not msg.get("read", False)]
-        
-        
-        device_messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        unread_messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        
-        return {
-            "messages": unread_messages,
-            "all_messages": device_messages,
-            "total_unread": len(unread_messages),
-            "total_messages": len(device_messages),
-            "connected_chat": chat_id  # Para debug
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Get all family messages (including read ones)
-@app.get("/family/messages/all")
-async def get_all_family_messages(device_id: str = Query(...)):
-    """Obtiene todos los mensajes familiares PARA UN DISPOSITIVO ESPECÍFICO"""
-    if not telegram_bot:
-        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
-    
-    try:
-        chat_id = await get_chat_id_from_device_db(device_id)
-        all_messages = await telegram_bot.load_messages()
-        if chat_id:
-            device_messages = [msg for msg in all_messages if msg.get("chat_id") == chat_id]
-        else:
-            device_messages = []
+        async with async_session() as session:
+            # 1. Obtener mensajes no leídos para este device_id
+            stmt_unread = (
+                select(FamilyMessages)
+                .where(
+                    FamilyMessages.device_id == device_id,
+                    FamilyMessages.read == False
+                )
+                .order_by(FamilyMessages.timestamp.asc()) # Del más antiguo al más nuevo
+            )
+            unread_messages = (await session.execute(stmt_unread)).scalars().all()
             
-        return {
-            "messages": device_messages,
-            "total": len(device_messages),
-            "connected_chat": chat_id
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            # 2. Obtener todos los mensajes (historial) para este device_id
+            stmt_all = (
+                select(FamilyMessages)
+                .where(FamilyMessages.device_id == device_id)
+                .order_by(FamilyMessages.timestamp.desc()) # Del más nuevo al más antiguo
+                .limit(50) # Limitamos el historial a 50
+            )
+            all_messages = (await session.execute(stmt_all)).scalars().all()
 
-# Get today's family messages
-@app.get("/family/messages/today")
-async def get_today_family_messages(device_id: str = Query(...)):
-    """Obtiene mensajes del día de hoy PARA UN DISPOSITIVO ESPECÍFICO"""
-    if not telegram_bot:
-        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
-    
-    try:
-        chat_id = await get_chat_id_from_device_db(device_id)
-        today_messages = await telegram_bot.get_messages_today()
-        if chat_id:
-            device_messages = [msg for msg in today_messages if msg.get("chat_id") == chat_id]
-        else:
-            device_messages = []
-            
-        return {
-            "messages": device_messages,
-            "total": len(device_messages),
-            "date": datetime.now().strftime("%d/%m/%Y"),
-            "connected_chat": chat_id
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Convertir a formato JSON (necesario para la app)
+        def format_msg(msg):
+            return {
+                "id": msg.id,
+                "sender_name": msg.sender_name,
+                "message": msg.message,
+                "chat_id": msg.telegram_chat_id,
+                "timestamp": msg.timestamp.isoformat(),
+                "date": msg.timestamp.strftime("%d/%m/%Y"), 
+                "time": msg.timestamp.strftime("%H:%M"),
+                "read": msg.read
+            }
 
-# Get messages from a specific date
-@app.get("/family/messages/date/{date}")
-async def get_messages_by_date(date: str, device_id: str = Query(...)):
-    """Obtiene mensajes de una fecha específica PARA UN DISPOSITIVO ESPECÍFICO"""
-    if not telegram_bot:
-        raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
-    
-    try:
-        # Obtain chat_id associated with this device
-        chat_id = await get_chat_id_from_device_db(device_id)
-        date_formatted = date.replace("-", "/")
-        all_date_messages = await telegram_bot.get_messages_by_date(date_formatted)
+        unread_json = [format_msg(m) for m in unread_messages]
+        all_json = [format_msg(m) for m in all_messages]
         
-        if chat_id:
-            device_messages = [msg for msg in all_date_messages if msg.get("chat_id") == chat_id]
-        else:
-            device_messages = []
-            
         return {
-            "messages": device_messages,
-            "total": len(device_messages),
-            "date": date_formatted,
-            "connected_chat": chat_id
+            "messages": unread_json,      # Mensajes no leídos (para leer en voz alta)
+            "all_messages": all_json,     # Historial (para "Ver Mensajes")
+            "total_unread": len(unread_json),
+            "total_messages": len(all_json),
         }
     except Exception as e:
+        print(f"❌ Error en /family/messages (DB): {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Mark a specific message as read
+# --- mark_message_read (MODIFICADO) ---
 @app.post("/family/messages/{message_id}/read")
 async def mark_message_read(message_id: int):
-    """Marca un mensaje como leído"""
+    """Marca un mensaje como leído en la DB"""
     if not telegram_bot:
         raise HTTPException(status_code=503, detail="Bot de Telegram no configurado")
     
     try:
-        # Update message read status in Telegram bot
-        success = await telegram_bot.mark_as_read(message_id)
-        if success:
-            return {"message": "Mensaje marcado como leído", "message_id": message_id}
-        else:
-            raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+        async with async_session() as session:
+            stmt = (
+                update(FamilyMessages)
+                .where(FamilyMessages.id == message_id)
+                .values(read=True)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+            else:
+                return {"message": "Mensaje marcado como leído", "message_id": message_id}
     except Exception as e:
+        print(f"❌ Error en /mark_message_read (DB): {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Endpoints /all, /today, /date (OBSOLETOS) ---
+# Los eliminamos para simplificar, ya que get_family_messages ahora devuelve ambos.
+
+@app.get("/family/messages/all")
+async def get_all_family_messages(device_id: str = Query(...)):
+    raise HTTPException(status_code=410, detail="Endpoint obsoleto. Usa /family/messages")
+
+@app.get("/family/messages/today")
+async def get_today_family_messages(device_id: str = Query(...)):
+    raise HTTPException(status_code=410, detail="Endpoint obsoleto. Usa /family/messages")
+
+@app.get("/family/messages/date/{date}")
+async def get_messages_by_date(date: str, device_id: str = Query(...)):
+    raise HTTPException(status_code=410, detail="Endpoint obsoleto. Usa /family/messages")
+
 
 
 # ============================================
