@@ -2,12 +2,15 @@ import os
 import json
 import asyncio
 from datetime import datetime
-from telegram import Update
+# --- AÑADIDO ---
+from telegram import Update, BotCommand 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import aiofiles
 import traceback
 import secrets
-from sqlalchemy import select, delete, update
+# --- MODIFICADO ---
+# Renombramos 'update' a 'sqlalchemy_update' para evitar conflictos
+from sqlalchemy import select, delete, update as sqlalchemy_update
 from .database import async_session, PhoneVerification, DeviceData, UserConnections, FamilyMessages
 # Nota: Ya no importamos NADA de device_utils
 
@@ -18,7 +21,6 @@ PENDING_REQUESTS = {}
 def set_shared_state(active_ws: dict, pending_req: dict):
     global ACTIVE_WEBSOCKETS, PENDING_REQUESTS
     ACTIVE_WEBSOCKETS = active_ws
-    PENDING_REQUESTS = pending_req
     print("✅ Global state received in telegram_bot")
 
 
@@ -35,12 +37,7 @@ class FamilyMessagesBot:
         await update.message.reply_text(
             f"👋 ¡Hola {user_name}! Soy el bot de Compa.\n\n"
             "Con este bot puedes enviar mensajes a tus familiares.\n\n"
-            "NUEVOS COMANDOS:\n"
-            "• `/connect <código>` - Conecta tu Telegram a un dispositivo Compa.\n"
-            "• `/alias <código> <nombre>` - Asigna un nombre fácil (ej: 'Mama') a un dispositivo.\n"
-            "• `/m <nombre> <mensaje>` - Envía un mensaje a ese dispositivo (ej: `/m Mama ¡Hola!`).\n"
-            "• `/disconnect <nombre>` - Desconecta un dispositivo.\n"
-            "• `/login` - Inicia sesión en la app web.",
+            "Usa el menú (el botón `/`) para ver todos los comandos disponibles.",
             parse_mode="Markdown"
         )
     
@@ -70,10 +67,15 @@ class FamilyMessagesBot:
 """
         await update.message.reply_text(help_text, parse_mode="Markdown")
 
-    # --- ¡NUEVO! Comando /connect ---
+    # --- ¡MODIFICADO! Comando /connect (restaura el flujo de aprobación) ---
     async def connect_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
-        
+        user_info = {
+            "chat_id": chat_id,
+            "user_name": update.effective_user.name, # @username
+            "user_full_name": update.effective_user.full_name,
+        }
+
         if not context.args or len(context.args) == 0:
             await update.message.reply_text("Uso: `/connect <código_dispositivo>`", parse_mode="Markdown")
             return
@@ -89,40 +91,117 @@ class FamilyMessagesBot:
                 await update.message.reply_text(f"❌ Código de dispositivo '{device_code}' no encontrado.")
                 return
             
+            device_id = device.device_id
+            
             # 2. Comprobar si ya existe esta conexión
             stmt_conn = select(UserConnections).where(
                 UserConnections.telegram_chat_id == chat_id,
-                UserConnections.device_id == device.device_id
+                UserConnections.device_id == device_id
             )
             existing_conn = (await session.execute(stmt_conn)).scalar_one_or_none()
             
             if existing_conn:
                 await update.message.reply_text(f"✅ Ya estabas conectado a este dispositivo (Alias: {existing_conn.alias or 'ninguno'}).")
                 return
-
-            # 3. Crear la nueva conexión
-            new_connection = UserConnections(
-                telegram_chat_id=chat_id,
-                device_id=device.device_id,
-                alias=None # El usuario lo pondrá con /alias
-            )
-            session.add(new_connection)
             
+            # 3. Buscar el WebSocket activo para este dispositivo
+            websocket = ACTIVE_WEBSOCKETS.get(device_id)
+            if not websocket:
+                await update.message.reply_text("❌ Dispositivo no conectado. Asegúrate de que la app esté abierta en el dispositivo antes de conectar.")
+                return
+            
+            # 4. Generar una solicitud
+            request_id = secrets.token_urlsafe(16)
+            PENDING_REQUESTS[request_id] = {
+                "chat_id": chat_id,
+                "user_info": user_info,
+                "device_id": device_id,
+                "device_code": device_code,
+                "timestamp": datetime.utcnow()
+            }
+            
+            # 5. Enviar la solicitud al frontend (app.js)
             try:
-                await session.commit()
-                await update.message.reply_text(
-                    f"✅ ¡Conectado al dispositivo {device_code}!\n\n"
-                    f"Ahora, ponle un nombre fácil con:\n"
-                    f"`/alias {device_code} <nombre>`\n"
-                    f"Ej: `/alias {device_code} Abuelo`",
+                await websocket.send_text(json.dumps({
+                    "type": "connection_request",
+                    "request_id": request_id,
+                    "user_info": user_info
+                }))
+                await update.message.reply_text(f"⏳ Solicitud enviada al dispositivo {device_code}. Por favor, pide al usuario de la app que apruebe la conexión.")
+                print(f"🔔 Solicitud de conexión {request_id} enviada a {device_id} para chat {chat_id}")
+            except Exception as e:
+                print(f"❌ Error enviando solicitud por WebSocket: {e}")
+                await update.message.reply_text("❌ Error al contactar con el dispositivo. Inténtalo de nuevo.")
+                if request_id in PENDING_REQUESTS:
+                    del PENDING_REQUESTS[request_id]
+
+    # --- ¡NUEVO! Función para procesar la respuesta del frontend ---
+    async def process_connection_response(self, request_id: str, approved: bool, websocket):
+        """
+        Procesa la respuesta (aprobación/rechazo) del frontend.
+        Llamado desde main.py
+        """
+        print(f"Processing connection response for {request_id}, approved: {approved}")
+        
+        # 1. Recuperar la solicitud pendiente
+        request_data = PENDING_REQUESTS.get(request_id)
+        if not request_data:
+            print(f"⚠️ Solicitud {request_id} no encontrada o ya procesada.")
+            try:
+                await websocket.send_text(json.dumps({"type": "error", "text": "Solicitud no encontrada."}))
+            except: pass
+            return
+
+        # 2. Extraer datos
+        chat_id = request_data["chat_id"]
+        user_name = request_data["user_info"]["user_full_name"]
+        device_id = request_data["device_id"]
+        device_code = request_data["device_code"]
+
+        # 3. Eliminar la solicitud pendiente
+        del PENDING_REQUESTS[request_id]
+
+        # 4. Notificar al bot de Telegram
+        try:
+            if approved:
+                # 5. Si se aprueba, guardar en la DB
+                async with async_session() as session:
+                    new_connection = UserConnections(
+                        telegram_chat_id=chat_id,
+                        device_id=device_id,
+                        alias=None 
+                    )
+                    session.add(new_connection)
+                    await session.commit()
+                
+                # Notificar al Telegram
+                await self.application.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"✅ ¡Conexión Aprobada!\n\n"
+                         f"Ahora estás conectado al dispositivo {device_code}.\n"
+                         f"Usa `/alias {device_code} <nombre>` para ponerle un nombre fácil (ej: `/alias {device_code} Mama`).",
                     parse_mode="Markdown"
                 )
-            except Exception as e:
-                await session.rollback()
-                print(f"❌ Error al guardar la conexión: {e}")
-                await update.message.reply_text(f"❌ Error al guardar la conexión. ¿Quizás ya tienes ese dispositivo conectado sin alias?")
+                
+                # Notificar al Frontend
+                await websocket.send_text(json.dumps({
+                    "type": "connection_approved",
+                    "user_name": user_name,
+                    "chat_id": chat_id
+                }))
+                
+            else:
+                # 6. Si se rechaza, solo notificar
+                await self.application.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ Conexión Rechazada.\n\nEl usuario del dispositivo {device_code} ha rechazado tu solicitud."
+                )
+                
+        except Exception as e:
+            print(f"❌ Error al procesar la respuesta de conexión: {e}")
+            traceback.print_exc()
 
-    # --- ¡NUEVO! Comando /alias ---
+    # --- ¡MODIFICADO! Comando /alias (corrige el TypeError) ---
     async def alias_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
         
@@ -157,8 +236,10 @@ class FamilyMessagesBot:
                 return
 
             # 3. Actualizar la conexión
+            # --- CORRECCIÓN ---
+            # Usamos 'sqlalchemy_update' en lugar de 'update' para evitar el conflicto
             stmt_update = (
-                update(UserConnections)
+                sqlalchemy_update(UserConnections) 
                 .where(
                     UserConnections.telegram_chat_id == chat_id,
                     UserConnections.device_id == target_device_id
@@ -301,7 +382,8 @@ class FamilyMessagesBot:
         )
         
     # --- Comandos antiguos (obsoletos) eliminados ---
-    # (my_messages, handle_connect_command, process_connection_response, disconnect, status)
+    # (my_messages, handle_connect_command, disconnect, status)
+    # NOTA: process_connection_response se ha movido a su propia función
 
     # --- start_bot (actualizado con los nuevos comandos) ---
     async def start_bot(self):
@@ -312,6 +394,20 @@ class FamilyMessagesBot:
         try:
             print(f"🔄 Intentando iniciar bot de Telegram...")
             self.application = Application.builder().token(self.token).build()
+
+            # --- AÑADIDO: Definir y registrar los comandos del menú ---
+            commands = [
+                BotCommand("start", "👋 Bienvenida e info"),
+                BotCommand("connect", "🔗 Conectar a un dispositivo (ej: /connect 123456)"),
+                BotCommand("alias", "🏷️ Asignar nombre a dispositivo (ej: /alias 123456 Mama)"),
+                BotCommand("m", "💬 Enviar mensaje a un dispositivo (ej: /m Mama ¡Hola!)"),
+                BotCommand("disconnect", "🔌 Desconectar un dispositivo (ej: /disconnect Mama)"),
+                BotCommand("login", "🔑 Iniciar sesión en la app web"),
+                BotCommand("help", "🆘 Mostrar ayuda"),
+            ]
+            await self.application.bot.set_my_commands(commands)
+            print("✅ Comandos del bot actualizados en Telegram.")
+            # --- FIN DEL BLOQUE AÑADIDO ---
             
             # Registrar los nuevos comandos
             self.application.add_handler(CommandHandler("start", self.start_command))
