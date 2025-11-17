@@ -533,7 +533,38 @@ class MemoryManager:
         return await self.load_memory()
 
 
-
+async def validate_session_token(session_token: str) -> dict:
+    """
+    Valida si una sesión es válida y activa (comprobando la DB).
+    Esta función es independiente de sms_service.
+    """
+    try:
+        async with async_session() as db_session:
+            stmt = select(UserSession).where(
+                UserSession.session_token == session_token,
+                UserSession.verified == True,
+                UserSession.expires_at > datetime.utcnow()
+            )
+            result = await db_session.execute(stmt)
+            session = result.scalar_one_or_none()
+            
+            if session:
+                # Actualizar última actividad
+                session.last_activity = datetime.utcnow()
+                await db_session.commit()
+                
+                return {
+                    "valid": True,
+                    "session_id": session.id,
+                    "phone_number": session.phone_number, # Esto ahora es el chat_id
+                    "device_id": session.device_id
+                }
+            else:
+                return {"valid": False}
+                
+    except Exception as e:
+        print(f"❌ Error validando sesión (función local): {e}")
+        return {"valid": False, "error": str(e)}
 
 
     # Helper function to load conversation history from database
@@ -1492,7 +1523,7 @@ async def auth_with_telegram(request: Request, token: str):
                 expires=expires.strftime("%a, %d %b %Y %H:%M:%S GMT"), # Formato cookie
                 path="/",
                 samesite="lax",
-                httponly=False # False para que JS pueda leerla (como en tu login.html)
+                httponly=False 
             )
             response.set_cookie(
                 key="phone_number", # Mantenemos el nombre por compatibilidad
@@ -1510,11 +1541,6 @@ async def auth_with_telegram(request: Request, token: str):
         print(f"❌ Error en /auth/login_telegram: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Error al procesar el inicio de sesión.")
-
-# ============================================
-# FRONTEND STATIC FILES - Serve web application
-# ============================================
-# ... (el resto del archivo main.py)
 
 # ============================================
 # FRONTEND STATIC FILES - Serve web application
@@ -1546,6 +1572,7 @@ async def login_page():
         return FileResponse(login_file)
     return {"message": "Login page not found"}
 # Serve index.html as root endpoint
+# Serve index.html as root endpoint
 @app.get("/")
 async def read_root(request: Request, session_token: str = Header(None)):
     """Sirve la aplicación principal (requiere autenticación)"""
@@ -1554,15 +1581,17 @@ async def read_root(request: Request, session_token: str = Header(None)):
         # Intentar obtener de cookie
         session_token = request.cookies.get('session_token')
     
-    if session_token and sms_service:
-        # Validar sesión
-        session_info = await sms_service.validate_session(session_token)
-        if not session_info.get('valid'):
-            return RedirectResponse(url='/login')
-    elif sms_service:  # Si está configurado SMS pero no hay sesión
+    if not session_token:
+        # Si NO hay token, redirigir a login
+        return RedirectResponse(url='/login')
+
+    # Si HAY token, validarlo con nuestra nueva función
+    session_info = await validate_session_token(session_token)
+    if not session_info.get('valid'):
+        # Si el token es inválido, redirigir a login
         return RedirectResponse(url='/login')
     
-    # Sesión válida o SMS no configurado: servir app
+    # Si el token es válido, servir la app
     index_file = os.path.join(frontend_path, 'index.html')
     if os.path.exists(index_file):
         return FileResponse(index_file)
@@ -1641,10 +1670,8 @@ async def verify_code(request: VerifyRequest):
 @app.post("/auth/validate-session")
 async def validate_session(request: SessionValidateRequest):
     """Valida si una sesión es válida"""
-    if not sms_service:
-        raise HTTPException(status_code=503, detail="Servicio SMS no configurado")
-    
-    result = await sms_service.validate_session(request.session_token)
+    # Usamos nuestra nueva función local, independiente de sms_service
+    result = await validate_session_token(request.session_token)
     
     if not result["valid"]:
         raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
