@@ -530,7 +530,7 @@ El mensaje llegará directamente al dispositivo conectado."""
             await update.message.reply_text(
                 f"¡Hola {user_name}! 👋\n\n"
                 f"Para iniciar sesión en Compa, haz clic en este enlace. Es válido por 5 minutos:\n\n"
-                f"{login_link}\n\n"
+                f"`{login_link}`\n\n"
                 f"(Si no has solicitado esto, puedes ignorar este mensaje).",
                 parse_mode="Markdown"
             )
