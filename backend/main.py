@@ -20,7 +20,9 @@ import secrets
 from collections import defaultdict
 from pydantic import BaseModel
 
-from .database import async_session, Memory, init_db, DeviceData, UserSession, PhoneVerification, FamilyMessages
+# --- MODIFICADO ---
+# Importamos UserConnections que ahora necesitamos
+from .database import async_session, Memory, init_db, DeviceData, UserSession, PhoneVerification, FamilyMessages, UserConnections
 from .device_utils import link_chat_to_device, get_chat_id_from_device_db, get_device_from_chat_db
 from .sms_service import sms_service
 from .telegram_bot import FamilyMessagesBot
@@ -678,6 +680,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     # New device with client-provided ID
                     print(f"✅ New device registered: {device_id} - Code: {device_code}")
         
+        # --- BLOQUE CORREGIDO ---
         # Register or update device in database
         async with async_session() as session:
             # 1. Look for the device by ID
@@ -695,16 +698,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     conversation_history=[]  # Set default values
                 )
                 session.add(device_data)
+                db_chat_id = None # New device, no chat ID
             
             else:
                 # 3. If it exists, update its device_code if needed
                 if device_data.device_code != device_code:
-                    print(f"� Updating device_code in DB for {device_id}")
-                    device_data.device_code = device_data.telegram_chat_id
+                    print(f" Updating device_code in DB for {device_id}")
+                    # --- FIX FOR BUG 1 ---
+                    device_data.device_code = device_code # Correctly update to the code from the client
                 
-                # Store the chat_id we already had in the DB
-                db_chat_id = device_data.telegram_chat_id
+                # --- FIX FOR BUG 2 (CRASH) ---
+                # We must now query the UserConnections table to find an associated chat
+                stmt_conn = select(UserConnections.telegram_chat_id).where(
+                    UserConnections.device_id == device_id
+                ).limit(1)
+                result_conn = await session.execute(stmt_conn)
+                chat_id_tuple = result_conn.first()
+                db_chat_id = chat_id_tuple[0] if chat_id_tuple else None
+                # --- END FIX ---
+                
             await session.commit()
+        # --- FIN BLOQUE CORREGIDO ---
             
         print(f"📱 Device {device_id} (code {device_code}) ready in DB.")
 
