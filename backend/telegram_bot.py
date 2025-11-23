@@ -40,7 +40,14 @@ class FamilyMessagesBot:
             "Usa el menú (el botón `/`) para ver todos los comandos disponibles.",
             parse_mode="Markdown"
         )
-    
+    async def get_unread_messages(self):
+        """Get all unread messages sorted chronologically by timestamp"""
+        messages = await self.load_messages()
+        unread = [msg for msg in messages if not msg.get("read", False)]
+        unread.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
+        print(f"📬 get_unread_messages() devolvió {len(unread)} mensajes")
+        return unread
+
     # --- help_command (actualizado) ---
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = """🆘 **Ayuda - Bot Compa (Multidispositivo)**
