@@ -325,13 +325,36 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
             handleServerText(`Tengo ${parsed.messages.length} mensajes para leerte.`);
             readFamilyMessagesSequence(parsed.messages);
           }
+          
+          // --- BLOQUE AÑADIDO ---
+          // Handle silent notification for new messages
+          else if (parsed && parsed.type === 'new_message_notification') {
+            console.log('🔔 Notificación de nuevo mensaje recibida (silenciosa)');
+            // Llama a la función que revisa y actualiza el contador
+            checkForNewMessages(); 
+            // NO llames a handleServerText()
+            return; // Importante para no caer en el 'else'
+          }
+          // --- FIN BLOQUE AÑADIDO ---
+
           // Ignore WebSocket control messages (ping/pong)
           else if (parsed && (parsed.type === 'pong' || parsed.type === 'ping')) {
             if (VERBOSE) console.log('WS control:', parsed.type, parsed.ts || parsed);
-          } else {
-            // Fallback: treat as plain text message
-            handleServerText(ev.data);
+          } 
+          
+          // --- BLOQUE MODIFICADO ---
+          else {
+            // Fallback: Si es un JSON pero no lo conocemos, lo ignoramos.
+            // Si no es JSON (error de abajo), se mostrará.
+            if (parsed && parsed.type) {
+                console.warn('Tipo de mensaje WS no manejado:', parsed.type);
+            } else {
+                // Si es un JSON sin tipo o un texto plano, lo muestra
+                handleServerText(ev.data);
+            }
           }
+          // --- FIN BLOQUE MODIFICADO ---
+
         } catch (e) {
           // If JSON parsing fails, treat as plain text
           handleServerText(ev.data);
@@ -1177,6 +1200,18 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
               speakTextSoft('Tienes mensajes nuevos de tus familiares. ¿Quieres que te los lea?');
             }
           }
+          // --- AÑADIDO ---
+          // Asegura que el contador se actualice incluso si los mensajes disminuyen (se leen en otro lado)
+          else if (newCount < unreadMessagesCount) {
+             const countBadge = document.getElementById('unreadCount');
+             if (countBadge) {
+                countBadge.textContent = newCount > 0 ? newCount : '';
+                countBadge.style.display = newCount > 0 ? 'inline-block' : 'none';
+             }
+             unreadMessagesCount = newCount;
+          }
+          // --- FIN AÑADIDO ---
+
         }
       } catch (e) {
         console.error('Error checking for new messages:', e);
@@ -1466,6 +1501,9 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
         // ---- Periodic Message Check ----
         // Check for new family messages every 2 minutes (120000ms)
         setInterval(checkForNewMessages, 120000);
+        // --- AÑADIDO ---
+        // Comprueba al arrancar por si hay mensajes pendientes
+        setTimeout(checkForNewMessages, 2000); // Espera 2 seg a que todo cargue
 
         // ---- Audio Detection Initialization ----
         // Start monitoring the microphone for user speech
@@ -1580,4 +1618,4 @@ if (window.__ACOMPANIA_APPJS_LOADED) {
 window.__Acompania = window.__Acompania || {};
 window.__Acompania.authManager = authManager;
   })(); 
-} 
+}
