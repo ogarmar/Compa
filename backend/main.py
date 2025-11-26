@@ -857,8 +857,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             message_type = f"del {intent['explicit_date']}"
                         elif intent["wants_old_messages"] or any(word in user_message.lower() for word in ["antiguos", "todos", "historial"]):
                             # Get all historical messages
-                            all_messages = await telegram_bot.load_messages()
-                            messages = all_messages
+                            messages = await telegram_bot.get_all_messages()
                             message_type = "guardados"
                         else:
                             # Get unread messages (default)
