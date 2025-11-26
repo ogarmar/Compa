@@ -71,6 +71,83 @@ class FamilyMessagesBot:
             traceback.print_exc()
             return []
 
+    async def get_messages_by_date(self, date_str: str):
+        """Get messages from a specific date (format: dd/mm/yyyy) from database"""
+        try:
+            # Parse date string
+            from datetime import datetime, timedelta
+            day, month, year = date_str.split('/')
+            target_date = datetime(int(year), int(month), int(day))
+            next_date = target_date + timedelta(days=1)
+            
+            async with async_session() as session:
+                # Query messages from that specific date
+                stmt = select(FamilyMessages).where(
+                    FamilyMessages.timestamp >= target_date,
+                    FamilyMessages.timestamp < next_date
+                ).order_by(FamilyMessages.timestamp.asc())
+                
+                result = await session.execute(stmt)
+                db_messages = result.scalars().all()
+                
+                # Convert to format expected by frontend
+                messages = [
+                    {
+                        "id": msg.id,
+                        "sender_name": msg.sender_name,
+                        "message": msg.message,
+                        "chat_id": msg.telegram_chat_id,
+                        "timestamp": msg.timestamp.isoformat(),
+                        "date": msg.timestamp.strftime("%d/%m/%Y"),
+                        "time": msg.timestamp.strftime("%H:%M"),
+                        "read": msg.read
+                    }
+                    for msg in db_messages
+                ]
+                
+                print(f"📅 get_messages_by_date({date_str}) devolvió {len(messages)} mensajes")
+                return messages
+                
+        except Exception as e:
+            print(f"❌ Error en get_messages_by_date: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    async def get_all_messages(self):
+        """Get ALL messages from database (for old/historical messages)"""
+        try:
+            async with async_session() as session:
+                # Query all messages
+                stmt = select(FamilyMessages).order_by(FamilyMessages.timestamp.desc())
+                
+                result = await session.execute(stmt)
+                db_messages = result.scalars().all()
+                
+                # Convert to format expected by frontend
+                all_messages = [
+                    {
+                        "id": msg.id,
+                        "sender_name": msg.sender_name,
+                        "message": msg.message,
+                        "chat_id": msg.telegram_chat_id,
+                        "timestamp": msg.timestamp.isoformat(),
+                        "date": msg.timestamp.strftime("%d/%m/%Y"),
+                        "time": msg.timestamp.strftime("%H:%M"),
+                        "read": msg.read
+                    }
+                    for msg in db_messages
+                ]
+                
+                print(f"📚 get_all_messages() devolvió {len(all_messages)} mensajes")
+                return all_messages
+                
+        except Exception as e:
+            print(f"❌ Error en get_all_messages: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = """🆘 **Ayuda - Bot Compa (Multidispositivo)**
 
