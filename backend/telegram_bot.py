@@ -41,12 +41,40 @@ class FamilyMessagesBot:
             parse_mode="Markdown"
         )
     async def get_unread_messages(self):
-        """Get all unread messages sorted chronologically by timestamp"""
-        messages = await self.load_messages()
-        unread = [msg for msg in messages if not msg.get("read", False)]
-        unread.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
-        print(f"📬 get_unread_messages() devolvió {len(unread)} mensajes")
-        return unread
+        """Get all unread messages sorted chronologically by timestamp from database"""
+        try:
+            async with async_session() as session:
+                # Query unread messages from database
+                stmt = select(FamilyMessages).where(
+                    FamilyMessages.read == False
+                ).order_by(FamilyMessages.timestamp.asc())
+                
+                result = await session.execute(stmt)
+                db_messages = result.scalars().all()
+                
+                # Convert to format expected by frontend
+                unread = [
+                    {
+                        "id": msg.id,
+                        "sender_name": msg.sender_name,
+                        "message": msg.message,
+                        "chat_id": msg.telegram_chat_id,
+                        "timestamp": msg.timestamp.isoformat(),
+                        "date": msg.timestamp.strftime("%d/%m/%Y"),
+                        "time": msg.timestamp.strftime("%H:%M"),
+                        "read": msg.read
+                    }
+                    for msg in db_messages
+                ]
+                
+                print(f"📬 get_unread_messages() devolvió {len(unread)} mensajes")
+                return unread
+                
+        except Exception as e:
+            print(f"❌ Error en get_unread_messages: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
     # --- help_command (actualizado) ---
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
