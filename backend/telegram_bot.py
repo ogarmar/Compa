@@ -431,7 +431,7 @@ class FamilyMessagesBot:
                 await session.commit()
             
             base_url = os.getenv("APP_BASE_URL", "http://localhost:8000") 
-            login_link = f"{base_url}/auth/login_telegram?token={token}"
+            login_link = f"{base_url}auth/login_telegram?token={token}"
             
             await update.message.reply_text(
                 f"¡Hola {user_name}! 👋\n\n"
