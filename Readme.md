@@ -32,7 +32,7 @@ Compa is an innovative AI-powered voice assistant specifically designed to suppo
   _Now includes tables for `user_sessions` and `phone_verifications`._  
 - **📱 Device Management**: Multi-device support with secure connection codes  
   _Devices are now linked to verified phone accounts._  
-- **🔐 Secure SMS Authentication**: User verification and session creation using **Twilio Verify** to protect access  
+- **🔐 Secure Phone Authentication**: User verification and session creation using **the SAME Telegram Bot** to protect access  
 
 ---
 
@@ -46,7 +46,7 @@ graph TD
     B --> D[Telegram Bot]
     B --> E[Google Gemini AI]
     B --> F[PostgreSQL Database]
-    B --> G[SMS Service Twilio]
+    B --> G[Telegram Service Verification]
     D -->|Messages| H[Family Members]
     C -->|Store/Retrieve| F
     E -->|Generate Responses| B
@@ -62,7 +62,6 @@ graph TD
 - **PostgreSQL** – Primary database (via asyncpg)  
 - **Google Gemini AI** – Advanced language model integration  
 - **python-telegram-bot** – Telegram integration  
-- **Twilio** – SMS-based user verification  
 - **WebSocket** – Real-time communication  
 
 ### Frontend
@@ -82,7 +81,7 @@ Compa/
 ├── backend/
 │   ├── main.py               # FastAPI backend and WebSocket
 │   ├── telegram_bot.py       # Telegram bot integration
-│   ├── sms_service.py        # SMS verification logic (Twilio)
+│   ├── sms_service.py        # SMS verification logic (Twilio (NO LONGER SUPPORTED))
 │
 ├── frontend/
 │   ├── static/
@@ -91,7 +90,7 @@ Compa/
 │   │   └── app.js            # WebSocket, UI, voice logic
 │   ├── login.html            # Phone authentication page
 │
-├── railway.toml              # Deployment script (Release Command) for Railway
+├── railway.toml              # Deployment script (Release Command) for Railway (NO LONGER SUPPORTED)
 ├── .env.example              # Template for new Twilio environment variables
 ├── requirements.txt          # Python dependencies
 ├── .env                      # Environment configuration (not committed)
@@ -107,7 +106,6 @@ Compa/
 - **Python >= 3.11**  
 - **Telegram account** to set up the bot  
 - **API access to Google Gemini** (via developer token)  
-- **Twilio account** (Account SID, Auth Token, and Verify SID)  
 
 ### Installation Steps
 
@@ -126,9 +124,6 @@ Compa/
     ```bash
     GEMINI_TOKEN=your_gemini_api_key
     TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-    TWILIO_ACCOUNT_SID=your_twilio_sid
-    TWILIO_AUTH_TOKEN=your_twilio_token
-    TWILIO_VERIFY_SERVICE_SID=your_twilio_verify_sid
     ```
 
 4. **Start the backend server:**
@@ -143,7 +138,7 @@ Compa/
 
 ## 🔐 Security Features
 
-- **Secure SMS Verification**: Access to the app is now protected by phone-based verification (Twilio Verify).  
+- **Secure Phone Verification**: Access to the app is now protected by phone-based verification (Telegram Verify).  
 - **User Sessions**: Each verified user creates a session stored in the database and saved as a `session_token` cookie.  
 - **Device Validation**: Each `device_id` is linked to the authenticated user session.  
 - **Secure WebSocket Connections**: Encrypted communication in real time.  
@@ -235,7 +230,7 @@ Compa es un innovador asistente de voz potenciado por IA, específicamente dise�
   _Ahora incluye tablas para `user_sessions` y `phone_verifications`._  
 - **📱 Gestión de Dispositivos**: Soporte multi-dispositivo con códigos seguros de conexión  
   _Los dispositivos ahora se enlazan a las cuentas de teléfono verificadas._  
-- **🔐 Autenticación Segura por SMS**: Verificación de usuario y creación de sesión usando **Twilio Verify** para proteger el acceso
+- **🔐 Autenticación Segura por Telegram**: Verificación de usuario y creación de sesión usando **el MISMO Bot de Telegram** para proteger el acceso
 
 ---
 
@@ -248,7 +243,7 @@ graph TD
     B --> D[Bot Telegram]
     B --> E[Google Gemini AI]
     B --> F[PostgreSQL]
-    B --> G[Servicio SMS Twilio]
+    B --> G[Servicio Autenticación Telegram]
     D -->|Mensajes| H[Familiares]
     C -->|Guardar/Recuperar| F
     E -->|Generar Respuestas| B
@@ -264,7 +259,6 @@ graph TD
 - **PostgreSQL** – Base de datos principal (vía asyncpg)  
 - **Google Gemini AI** – Integración avanzada de modelo de lenguaje  
 - **python-telegram-bot** – Integración con Telegram  
-- **Twilio** – Verificación de usuario mediante SMS  
 - **WebSocket** – Comunicación en tiempo real  
 
 ### Frontend
@@ -281,7 +275,7 @@ Compa/
 │
 ├── backend/
 │   ├── main.py               # Backend principal (FastAPI + WebSocket)
-│   ├── sms_service.py        # Lógica de verificación SMS (Twilio)
+│   ├── sms_service.py        # Lógica de verificación SMS (Twilio(NO SE USA ACTUALMENTE))
 │   ├── telegram_bot.py       # Integración con Telegram
 │   ├── database/
 │   │   ├── models.py         # Modelos SQLAlchemy (incluye user_sessions y phone_verifications)
@@ -298,7 +292,7 @@ Compa/
 │
 ├── requirements.txt          # Dependencias de Python
 ├── .env.example              # Plantilla con variables de entorno (Twilio, Gemini, Telegram)
-├── railway.toml              # Script de despliegue (Release Command para Railway)
+├── railway.toml              # Script de despliegue (Release Command para Railway(NO SE USA ACTUALMENTE))
 ├── README.md                 # Documentación del proyecto
 └── LICENSE.md                # Licencia
 ```
@@ -309,9 +303,8 @@ Compa/
 ### Prerrequisitos
 - **Python >= 3.11**  
 - **Cuenta de Telegram** para configurar el bot  
-- **Acceso a la API de Google Gemini** (vía token de desarrollador)  
-- **Cuenta de Twilio** (Account SID, Auth Token y Verify SID)  
-
+- **Acceso a la API de Google Gemini** (vía token de desarrollador)
+  
 ### Pasos de Instalación
 
 1. **Clonar el repositorio:**
@@ -329,9 +322,6 @@ Compa/
     ```bash
     GEMINI_TOKEN=tu_clave_api_gemini
     TELEGRAM_BOT_TOKEN=tu_token_bot_telegram
-    TWILIO_ACCOUNT_SID=tu_twilio_sid
-    TWILIO_AUTH_TOKEN=tu_twilio_token
-    TWILIO_VERIFY_SERVICE_SID=tu_twilio_verify_sid
     ```
 
 4. **Iniciar el servidor backend:**
@@ -346,7 +336,7 @@ Compa/
 
 ## 🔐 Características de Seguridad
 
-- **Verificación Segura por SMS**: El acceso a la app ahora está protegido mediante verificación telefónica con **Twilio Verify**.  
+- **Verificación Segura por Telegram**: El acceso a la app ahora está protegido mediante verificación telefónica con **el MISMO Bot de Telegram**.  
 - **Sesiones de Usuario**: Cada usuario verificado crea una sesión almacenada en la base de datos y guardada como cookie `session_token`.  
 - **Validación de Dispositivos**: Cada `device_id` se asocia a la sesión de usuario autenticada.  
 - **Conexiones WebSocket Seguras**: Comunicación cifrada en tiempo real.  
