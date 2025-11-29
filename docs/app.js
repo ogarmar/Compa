@@ -177,7 +177,19 @@ const translations = {
         footerContacto: "Contacto",
         footerEmail: "compamessages@gmail.com",
         footerFormulario: "Formulario de Contacto",
-        footerCopyright: "&copy; 2025 Oscar Garcia (ogarmar). Algunos derechos reservados bajo <a href='https://github.com/ogarmar/Compa/blob/main/LICENSE.md'>licencia</a>."
+        footerCopyright: "&copy; 2025 Oscar Garcia (ogarmar). Algunos derechos reservados bajo <a href='https://github.com/ogarmar/Compa/blob/main/LICENSE.md'>licencia</a>.",
+        heroDemoTitle: "Conversación Natural",
+        heroDemoSubtitle: "Haz clic para ver la demo",
+        
+        // NUEVAS CLAVES SECCIÓN CÓMO USARLO
+        howToUseTitle: "¿Cómo funciona Compa?",
+        howToUseSubtitle: "Empezar es muy sencillo, mira este breve tutorial",
+        step1Title: "Inicia Sesión",
+        step1Text: "Accede de forma segura con tu número de teléfono y el código de verificación.",
+        step2Title: "Conecta Telegram",
+        step2Text: "Vincula el bot de Telegram para recibir mensajes de tus familiares.",
+        step3Title: "Empieza a Hablar",
+        step3Text: "Simplemente pulsa el micrófono y habla. Él recordará lo importante."
     },
     en: {
         metaDescription: "Compa is an AI-powered voice assistant that supports people with Alzheimer's and memory issues. 24/7 family connection with smart memory management.",
@@ -277,7 +289,19 @@ const translations = {
         footerContacto: "Contact",
         footerEmail: "compamessages@gmail.com",
         footerFormulario: "Contact Form",
-        footerCopyright: "&copy; 2025 Oscar Garcia (ogarmar). Some rights reserved under <a href='https://github.com/ogarmar/Compa/blob/main/LICENSE.md'>license</a>."
+        footerCopyright: "&copy; 2025 Oscar Garcia (ogarmar). Some rights reserved under <a href='https://github.com/ogarmar/Compa/blob/main/LICENSE.md'>license</a>.",
+        heroDemoTitle: "Natural Conversation",
+        heroDemoSubtitle: "Click to watch the demo",
+
+        // NUEVAS CLAVES SECCIÓN CÓMO USARLO
+        howToUseTitle: "How does Compa work?",
+        howToUseSubtitle: "Getting started is easy, watch this short tutorial",
+        step1Title: "Login",
+        step1Text: "Securely access with your phone number and verification code.",
+        step2Title: "Connect Telegram",
+        step2Text: "Link the Telegram bot to verify messages from your family instantly.",
+        step3Title: "Start Talking",
+        step3Text: "Just press the microphone and talk. He will remember what matters."
     }
 };
 
@@ -408,7 +432,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const visual = document.querySelector('.hero-visual');
     const card = document.querySelector('.demo-placeholder');
+    // ... código existente ...
 
+    // --- LÓGICA VIDEO HERO ---
+    const heroCard = document.querySelector('.demo-placeholder');
+
+    if (heroCard) {
+        heroCard.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Si ya está activo, no hacemos nada
+            if (this.classList.contains('video-active')) return;
+
+            this.classList.add('video-active');
+            
+            // CAMBIO: Usamos etiqueta <video> local en vez de YouTube
+            this.innerHTML = `
+                <video 
+                    width="100%" 
+                    height="100%" 
+                    autoplay
+                    controls
+                    style="border-radius: 20px; width: 100%; height: 100%; object-fit: cover;">
+                    <source src="assets/demo.mp4" type="video/mp4">
+                    Tu navegador no soporta videos HTML5.
+                </video>
+            `;
+            
+            // Quitamos la transformación 3D para facilitar el uso de los controles
+            this.style.transform = 'none';
+        });
+    }
     if (visual && card) {
         visual.addEventListener('mousemove', (e) => {
             const rect = visual.getBoundingClientRect();
